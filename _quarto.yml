@@ -1,3 +1,4 @@
+
 project:
   type: website
   output-dir: docs
@@ -5,12 +6,34 @@ project:
 
 website:
   title: "Financial Econometrics DRP"
+
   navbar:
     left:
       - href: index.qmd
         text: Home
-      - href: sessions/01-stylised-facts.qmd
-        text: Session 1
+
+      - text: Sessions
+        menu:
+          - text: "01 — Financial Stylised Facts"
+            href: sessions/01-stylised-facts.qmd
+          - text: "02 — Stationarity"
+            href: sessions/02-stationarity.qmd
+          - text: "03 — Measuring Volatility"
+            href: sessions/03-measuring-volatility.qmd
+          - text: "04 — GARCH Models"
+            href: sessions/04-garch.qmd
+          - text: "05 — HAR Models"
+            href: sessions/05-har.qmd
+          - text: "06 — Machine Learning"
+            href: sessions/06-boosted-trees.qmd
+          - text: "07 — Continuous-Time Models"
+            href: sessions/07-continuous-time.qmd
+          - text: "08 — Point Processes"
+            href: sessions/08-point-processes.qmd
+          - text: "09 — Self-Exciting Markets"
+            href: sessions/09-connecting-processes.qmd
+          - text: "10 — Research Workshop"
+            href: sessions/10-research-workshop.qmd
 
 format:
   html:
