@@ -1,6 +1,6 @@
 
 ---
-title: "Financial Econometrics DRP"
+title: "Directed Reading Program"
 title-block-style: none
 toc: false
 ---

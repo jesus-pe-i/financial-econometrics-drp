@@ -37,7 +37,7 @@
   {
     "objectID": "index.html",
     "href": "index.html",
-    "title": "Financial Econometrics DRP",
+    "title": "Directed Reading Program",
     "section": "",
     "text": "Imperial College London · Directed Reading Programme\n\n\nFinancial Econometrics\n\nCan we predict financial market turbulence?\nAn empirical introduction to financial time series, volatility forecasting and mathematical modelling.\n\n\n\n\nPart I — Financial Time Series\n\n\n SESSION 01 Financial Stylised Facts  Prices, returns, distributions and empirical patterns.  \n SESSION 02 Stationarity and Time Series Models  Random walks, ARIMA, GARCH and stochastic simulations.  \n\n\nPart II — Volatility Forecasting\n\n\n SESSION 03 Measuring and Forecasting Volatility  Latent volatility, realised variance and Value-at-Risk.  \n SESSION 04 GARCH Models and Risk Forecasting  Model fitting, conditional variance and backtesting.  \n SESSION 05 HAR Models and Realised Volatility  Volatility persistence across multiple time horizons.  \n SESSION 06 Machine Learning and Volatility Forecasting  Boosted trees, model comparisons and research projects.  \n\n\nPart III — Continuous-Time Models and Research\n\n\n SESSION 07 Continuous-Time Financial Models  Brownian motion, diffusions and Lévy jump processes.  \n SESSION 08 Point Processes and Market Microstructure  Poisson processes, Hawkes models and event clustering.  \n SESSION 09 From Diffusions to Self-Exciting Markets  Connecting continuous-time price dynamics and event arrivals.  \n SESSION 10 Research Workshop  Independent investigations, findings and discussion."
   },
