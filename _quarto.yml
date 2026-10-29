@@ -1,0 +1,19 @@
+project:
+  type: website
+  output-dir: docs
+  execute-dir: project
+
+website:
+  title: "Financial Econometrics DRP"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: sessions/01-stylised-facts.qmd
+        text: Session 1
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: true

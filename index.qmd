@@ -1,0 +1,16 @@
+---
+title: "Can We Predict Financial Market Turbulence?"
+---
+
+## Financial Econometrics DRP
+
+Imperial College London
+
+An introduction to financial time series,
+volatility forecasting and empirical research.
+
+## Programme
+
+- Session 1: Financial Stylised Facts
+- Session 2: Stationarity and GARCH
+- Session 3: Measuring Volatility

@@ -1,0 +1,17 @@
+# Financial datasets
+intraday_data/
+
+# RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Quarto temporary files
+.quarto/
+*_cache/
+*_files/
+
+# Operating system
+.DS_Store
+Thumbs.db
