@@ -1,25 +1,5 @@
 ---
-title: "Session 1 — Financial Stylised Facts"
+title: "Session 01 — Financial Stylised Facts"
 ---
 
-## What do financial time series look like?
-
-Let's begin with a simple empirical observation.
-
-```{r}
-#| echo: false
-
-library(plotly)
-
-p <- readRDS("figures/01/example.rds")
-ggplotly(p)
-```
-
-## What can we learn from this?
-
-Some discussion about the observed behaviour.
-
-## Your investigation
-
-Find a financial time series and reproduce
-two of the empirical phenomena discussed.
+[under construction]

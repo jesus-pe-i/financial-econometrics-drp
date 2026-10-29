@@ -15,5 +15,11 @@ website:
 format:
   html:
     theme: cosmo
+    css: styles.css
     toc: true
     code-fold: true
+
+execute:
+  echo: false
+  warning: false
+  message: false

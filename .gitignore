@@ -3,6 +3,7 @@ intraday_data/
 
 # RStudio
 .Rproj.user/
+.Rproj
 .Rhistory
 .RData
 .Ruserdata
@@ -15,3 +16,5 @@ intraday_data/
 # Operating system
 .DS_Store
 Thumbs.db
+/.quarto/
+**/*.quarto_ipynb

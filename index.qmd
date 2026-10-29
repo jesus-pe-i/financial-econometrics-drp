@@ -1,16 +1,130 @@
+
 ---
-title: "Can We Predict Financial Market Turbulence?"
+title: "Financial Econometrics DRP"
+title-block-style: none
+toc: false
 ---
 
-## Financial Econometrics DRP
+<div class="course-header">
 
-Imperial College London
+<div class="course-kicker">
+Imperial College London · Directed Reading Programme
+</div>
 
-An introduction to financial time series,
-volatility forecasting and empirical research.
+# Financial Econometrics
 
-## Programme
+<div class="course-subtitle">
+Can we predict financial market turbulence?
 
-- Session 1: Financial Stylised Facts
-- Session 2: Stationarity and GARCH
-- Session 3: Measuring Volatility
+An empirical introduction to financial time series,
+volatility forecasting and mathematical modelling.
+</div>
+
+</div>
+
+
+<div class="session-section">
+Part I — Financial Time Series
+</div>
+
+<div class="session-grid">
+
+<a class="session-card" href="sessions/01-stylised-facts.qmd">
+  <span class="session-number">SESSION 01</span>
+  <span class="session-name">Financial Stylised Facts</span>
+  <span class="session-description">
+    Prices, returns, distributions and empirical patterns.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/02-stationarity.qmd">
+  <span class="session-number">SESSION 02</span>
+  <span class="session-name">Stationarity and Time Series Models</span>
+  <span class="session-description">
+    Random walks, ARIMA, GARCH and stochastic simulations.
+  </span>
+</a>
+
+</div>
+
+
+<div class="session-section">
+Part II — Volatility Forecasting
+</div>
+
+<div class="session-grid">
+
+<a class="session-card" href="sessions/03-measuring-volatility.qmd">
+  <span class="session-number">SESSION 03</span>
+  <span class="session-name">Measuring and Forecasting Volatility</span>
+  <span class="session-description">
+    Latent volatility, realised variance and Value-at-Risk.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/04-garch.qmd">
+  <span class="session-number">SESSION 04</span>
+  <span class="session-name">GARCH Models and Risk Forecasting</span>
+  <span class="session-description">
+    Model fitting, conditional variance and backtesting.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/05-har.qmd">
+  <span class="session-number">SESSION 05</span>
+  <span class="session-name">HAR Models and Realised Volatility</span>
+  <span class="session-description">
+    Volatility persistence across multiple time horizons.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/06-boosted-trees.qmd">
+  <span class="session-number">SESSION 06</span>
+  <span class="session-name">Machine Learning and Volatility Forecasting</span>
+  <span class="session-description">
+    Boosted trees, model comparisons and research projects.
+  </span>
+</a>
+
+</div>
+
+
+<div class="session-section">
+Part III — Continuous-Time Models and Research
+</div>
+
+<div class="session-grid">
+
+<a class="session-card" href="sessions/07-continuous-time.qmd">
+  <span class="session-number">SESSION 07</span>
+  <span class="session-name">Continuous-Time Financial Models</span>
+  <span class="session-description">
+    Brownian motion, diffusions and Lévy jump processes.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/08-point-processes.qmd">
+  <span class="session-number">SESSION 08</span>
+  <span class="session-name">Point Processes and Market Microstructure</span>
+  <span class="session-description">
+    Poisson processes, Hawkes models and event clustering.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/09-connecting-processes.qmd">
+  <span class="session-number">SESSION 09</span>
+  <span class="session-name">From Diffusions to Self-Exciting Markets</span>
+  <span class="session-description">
+    Connecting continuous-time price dynamics and event arrivals.
+  </span>
+</a>
+
+<a class="session-card" href="sessions/10-research-workshop.qmd">
+  <span class="session-number">SESSION 10</span>
+  <span class="session-name">Research Workshop</span>
+  <span class="session-description">
+    Independent investigations, findings and discussion.
+  </span>
+</a>
+
+</div>

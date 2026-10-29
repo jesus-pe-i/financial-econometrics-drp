@@ -1,0 +1,253 @@
+
+/* ============================================================
+   Financial Econometrics DRP — Quarto website styles
+   Imperial-inspired palette: white, electric blue, vivid mint.
+   Colours approximated from the supplied rebrand image.
+   Compatible with the Quarto 'cosmo' Bootstrap theme.
+   ============================================================ */
+
+/* 1. Shared palette and typography */
+:root {
+  --drp-bg: #ffffff;
+  --drp-surface: #ffffff;
+  --drp-text: #20253b;
+  --drp-navy: #0100ca;
+  --drp-muted: #596277;
+  --drp-accent: #0100ca;
+  --drp-mint: #008C95;
+  --drp-line: #e4e6f2;
+  --drp-soft: #f5f6ff;
+  --drp-radius: 12px;
+}
+
+body {
+  background: var(--drp-bg);
+  color: var(--drp-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.02rem;
+  line-height: 1.7;
+}
+
+/* 2. Navigation */
+#quarto-header .navbar {
+  background: var(--drp-navy);
+  border-bottom: 2px solid var(--drp-mint);
+  box-shadow: none;
+}
+
+#quarto-header .navbar-brand {
+  color: var(--drp-mint);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+#quarto-header .nav-link {
+  color: #ededff;
+}
+
+#quarto-header .nav-link:hover,
+#quarto-header .nav-link.active {
+  color: var(--drp-mint);
+}
+
+#quarto-header .navbar-brand:hover,
+#quarto-header .navbar-brand:focus {
+  color: #ffffff;
+}
+
+/* 3. Lecture typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--drp-navy);
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+}
+
+.quarto-title-block .title {
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  letter-spacing: -0.04em;
+  margin-bottom: 0.65rem;
+}
+
+main.content h2 {
+  margin-top: 2.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--drp-line);
+}
+
+main.content h3 {
+  margin-top: 1.8rem;
+}
+
+p, ul, ol {
+  margin-bottom: 1rem;
+}
+
+a {
+  color: var(--drp-accent);
+}
+
+a:hover {
+  color: #00008c;
+}
+
+/* Table of contents */
+#TOC a {
+  color: var(--drp-muted);
+}
+
+#TOC a:hover,
+#TOC a.active {
+  color: var(--drp-accent);
+}
+
+/* 4. Figures, equations and code */
+figure, .quarto-figure {
+  margin: 1.6rem 0;
+}
+
+figcaption, .figure-caption {
+  color: var(--drp-muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.cell-output-display {
+  margin: 1.2rem 0;
+}
+
+.cell-output-display img,
+.cell-output-display .html-widget {
+  max-width: 100%;
+}
+
+pre, div.sourceCode {
+  border-radius: 8px;
+}
+
+/* 5. Homepage title — no banner image needed */
+.course-header {
+  padding: 1rem 0 1.5rem;
+  border-bottom: 1px solid var(--drp-line);
+  margin-bottom: 2rem;
+}
+
+.course-kicker {
+  color: var(--drp-accent);
+  font-size: 0.77rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.course-subtitle {
+  color: var(--drp-muted);
+  font-size: 1.08rem;
+  max-width: 42rem;
+}
+
+/* 6. Homepage session directory */
+.session-section {
+  margin: 2rem 0 0.7rem;
+  font-size: 0.82rem;
+  color: var(--drp-muted);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 2rem;
+}
+
+a.session-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 132px;
+  padding: 1.2rem 1.3rem;
+  background: var(--drp-surface);
+  border: 1px solid var(--drp-line);
+  border-bottom: 3px solid transparent;
+  border-radius: var(--drp-radius);
+  color: var(--drp-text);
+  text-decoration: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease,
+              transform 150ms ease;
+}
+
+a.session-card:hover,
+a.session-card:focus-visible {
+  color: var(--drp-text);
+  border-color: var(--drp-accent);
+  border-bottom-color: var(--drp-mint);
+  box-shadow: 0 5px 20px rgba(1, 0, 202, 0.09);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.session-number {
+  color: var(--drp-accent);
+  font-weight: 750;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+
+.session-name {
+  color: var(--drp-navy);
+  font-weight: 650;
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.session-description {
+  color: var(--drp-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* 7. Optional placeholder text inside unfinished sessions */
+.under-construction {
+  color: var(--drp-muted);
+  font-style: italic;
+  padding: 1rem 0;
+}
+
+/* 8. Responsive layout and accessibility */
+@media (max-width: 700px) {
+  .session-grid {
+    grid-template-columns: 1fr;
+  }
+
+  a.session-card {
+    min-height: 108px;
+  }
+
+  .quarto-title-block .title {
+    font-size: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.session-card {
+    transition: none;
+  }
+
+  a.session-card:hover {
+    transform: none;
+  }
+}
+
+/* 9. Clear keyboard focus without relying on colour alone */
+a:focus-visible {
+  outline: 2px solid var(--drp-accent);
+  outline-offset: 3px;
+}
+
+#quarto-header a:focus-visible {
+  outline-color: var(--drp-mint);
+}

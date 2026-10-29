@@ -1,51 +1,79 @@
 [
   {
-    "objectID": "sessions/01-stylised-facts.html",
-    "href": "sessions/01-stylised-facts.html",
-    "title": "Session 1 — Financial Stylised Facts",
+    "objectID": "sessions/10-research-workshop.html",
+    "href": "sessions/10-research-workshop.html",
+    "title": "Session 10 — Research Workshop",
     "section": "",
-    "text": "Let’s begin with a simple empirical observation.\n\n\nWarning: package 'plotly' was built under R version 4.5.3\n\n\nCargando paquete requerido: ggplot2\n\n\nWarning: package 'ggplot2' was built under R version 4.5.3\n\n\n\nAdjuntando el paquete: 'plotly'\n\n\nThe following object is masked from 'package:ggplot2':\n\n    last_plot\n\n\nThe following object is masked from 'package:stats':\n\n    filter\n\n\nThe following object is masked from 'package:graphics':\n\n    layout"
+    "text": "[under construction]"
   },
   {
-    "objectID": "sessions/01-stylised-facts.html#what-do-financial-time-series-look-like",
-    "href": "sessions/01-stylised-facts.html#what-do-financial-time-series-look-like",
-    "title": "Session 1 — Financial Stylised Facts",
+    "objectID": "sessions/08-point-processes.html",
+    "href": "sessions/08-point-processes.html",
+    "title": "Session 08 — Point Processes and Market Microstructure",
     "section": "",
-    "text": "Let’s begin with a simple empirical observation.\n\n\nWarning: package 'plotly' was built under R version 4.5.3\n\n\nCargando paquete requerido: ggplot2\n\n\nWarning: package 'ggplot2' was built under R version 4.5.3\n\n\n\nAdjuntando el paquete: 'plotly'\n\n\nThe following object is masked from 'package:ggplot2':\n\n    last_plot\n\n\nThe following object is masked from 'package:stats':\n\n    filter\n\n\nThe following object is masked from 'package:graphics':\n\n    layout"
+    "text": "[under construction]"
   },
   {
-    "objectID": "sessions/01-stylised-facts.html#what-can-we-learn-from-this",
-    "href": "sessions/01-stylised-facts.html#what-can-we-learn-from-this",
-    "title": "Session 1 — Financial Stylised Facts",
-    "section": "What can we learn from this?",
-    "text": "What can we learn from this?\nSome discussion about the observed behaviour."
+    "objectID": "sessions/06-boosted-trees.html",
+    "href": "sessions/06-boosted-trees.html",
+    "title": "Session 06 — Machine Learning and Volatility Forecasting",
+    "section": "",
+    "text": "[under construction]"
   },
   {
-    "objectID": "sessions/01-stylised-facts.html#your-investigation",
-    "href": "sessions/01-stylised-facts.html#your-investigation",
-    "title": "Session 1 — Financial Stylised Facts",
-    "section": "Your investigation",
-    "text": "Your investigation\nFind a financial time series and reproduce two of the empirical phenomena discussed."
+    "objectID": "sessions/04-garch.html",
+    "href": "sessions/04-garch.html",
+    "title": "Session 04 — GARCH Models and Risk Forecasting",
+    "section": "",
+    "text": "[under construction]"
+  },
+  {
+    "objectID": "sessions/02-stationarity.html",
+    "href": "sessions/02-stationarity.html",
+    "title": "Session 02 — Stationarity and Time Series Models",
+    "section": "",
+    "text": "[under construction]"
   },
   {
     "objectID": "index.html",
     "href": "index.html",
-    "title": "Can We Predict Financial Market Turbulence?",
+    "title": "Financial Econometrics DRP",
     "section": "",
-    "text": "Imperial College London\nAn introduction to financial time series, volatility forecasting and empirical research."
+    "text": "Imperial College London · Directed Reading Programme\n\n\nFinancial Econometrics\n\nCan we predict financial market turbulence?\nAn empirical introduction to financial time series, volatility forecasting and mathematical modelling.\n\n\n\n\nPart I — Financial Time Series\n\n\n SESSION 01 Financial Stylised Facts  Prices, returns, distributions and empirical patterns.  \n SESSION 02 Stationarity and Time Series Models  Random walks, ARIMA, GARCH and stochastic simulations.  \n\n\nPart II — Volatility Forecasting\n\n\n SESSION 03 Measuring and Forecasting Volatility  Latent volatility, realised variance and Value-at-Risk.  \n SESSION 04 GARCH Models and Risk Forecasting  Model fitting, conditional variance and backtesting.  \n SESSION 05 HAR Models and Realised Volatility  Volatility persistence across multiple time horizons.  \n SESSION 06 Machine Learning and Volatility Forecasting  Boosted trees, model comparisons and research projects.  \n\n\nPart III — Continuous-Time Models and Research\n\n\n SESSION 07 Continuous-Time Financial Models  Brownian motion, diffusions and Lévy jump processes.  \n SESSION 08 Point Processes and Market Microstructure  Poisson processes, Hawkes models and event clustering.  \n SESSION 09 From Diffusions to Self-Exciting Markets  Connecting continuous-time price dynamics and event arrivals.  \n SESSION 10 Research Workshop  Independent investigations, findings and discussion."
   },
   {
-    "objectID": "index.html#financial-econometrics-drp",
-    "href": "index.html#financial-econometrics-drp",
-    "title": "Can We Predict Financial Market Turbulence?",
+    "objectID": "sessions/01-stylised-facts.html",
+    "href": "sessions/01-stylised-facts.html",
+    "title": "Session 01 — Financial Stylised Facts",
     "section": "",
-    "text": "Imperial College London\nAn introduction to financial time series, volatility forecasting and empirical research."
+    "text": "[under construction]"
   },
   {
-    "objectID": "index.html#programme",
-    "href": "index.html#programme",
-    "title": "Can We Predict Financial Market Turbulence?",
-    "section": "Programme",
-    "text": "Programme\n\nSession 1: Financial Stylised Facts\nSession 2: Stationarity and GARCH\nSession 3: Measuring Volatility"
+    "objectID": "sessions/03-measuring-volatility.html",
+    "href": "sessions/03-measuring-volatility.html",
+    "title": "Session 03 — Measuring and Forecasting Volatility",
+    "section": "",
+    "text": "[under construction]"
+  },
+  {
+    "objectID": "sessions/05-har.html",
+    "href": "sessions/05-har.html",
+    "title": "Session 05 — HAR Models and Realised Volatility",
+    "section": "",
+    "text": "[under construction]"
+  },
+  {
+    "objectID": "sessions/07-continuous-time.html",
+    "href": "sessions/07-continuous-time.html",
+    "title": "Session 07 — Continuous-Time Financial Models",
+    "section": "",
+    "text": "[under construction]"
+  },
+  {
+    "objectID": "sessions/09-connecting-processes.html",
+    "href": "sessions/09-connecting-processes.html",
+    "title": "Session 09 — From Diffusions to Self-Exciting Markets",
+    "section": "",
+    "text": "[under construction]"
   }
 ]
