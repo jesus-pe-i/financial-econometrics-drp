@@ -1,0 +1,29 @@
+# Financial datasets
+intraday_data/
+
+# RStudio
+.Rproj.user/
+.Rproj
+.Rhistory
+.RData
+.Ruserdata
+
+# Quarto temporary files
+.quarto/
+*_cache/
+# Ignore local Quarto figure outputs, but not published website assets
+/sessions/*_files/
+/index_files/
+
+# Operating system
+.DS_Store
+Thumbs.db
+/.quarto/
+**/*.quarto_ipynb
+
+# Local credentials and environment files
+.Renviron
+.Renviron.*
+.env
+.env.*
+!.env.example
