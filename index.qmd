@@ -1,6 +1,6 @@
 
 ---
-title: "Directed Reading Program"
+title: "Directed Reading Programme"
 title-block-style: none
 toc: false
 ---

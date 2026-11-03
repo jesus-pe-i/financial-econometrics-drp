@@ -281,11 +281,6 @@ make_daily_rv <- function(d, market = c("SPY", "BTC")) {
 # plot(rv_btc$day, rv_btc$rv, type = "l", main = "BTC daily realised variance")
 
 
-Sys.setenv(
-  ALPACA_API_KEY = "X",
-  ALPACA_SECRET_KEY = "X"
-)
-
 files <- list.files(
   "intraday_data",
   recursive = TRUE,
