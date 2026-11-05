@@ -1448,7 +1448,6 @@ feature of a process we are investigating.
 Dependence in levels, dependence in squared
 observations, and dependence in other transformations
 are not interchangeable concepts.
-
 In particular, strong autocorrelation in squares
 does not automatically establish volatility clustering
 in the sense of a changing conditional variance.
