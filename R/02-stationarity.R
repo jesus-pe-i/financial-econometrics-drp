@@ -1847,6 +1847,8 @@ saveRDS(p6, "figures/02/lag-scatter-acf.rds")
 
 ## Empirical autocorrelation ----
 
+### Simulations ----
+
 set.seed(2026)
 
 n_series_acf <- 300
@@ -1861,171 +1863,143 @@ innov_wn <- matrix(rnorm(n_series_acf * n_paths_acf), nrow = n_series_acf)
 innov_ar <- matrix(rnorm(n_series_acf * n_paths_acf), nrow = n_series_acf)
 initials_ar <- rnorm(n_paths_acf)
 
-wn_paths <- innov_wn
+emp_acf <- function(x) {
+  as.numeric(acf(x, plot = FALSE, lag.max = lag_max_acf)$acf)[-1]
+}
 
-ar_paths_emp <- lapply(rho_values_emp, function(rho) {
-  x <- matrix(NA_real_, n_series_acf, n_paths_acf)
+wn_initial <- innov_wn[, 1]
+rho_initial <- rho_values_emp[rho_start_emp]
+ar_initial <- numeric(n_series_acf)
+previous <- initials_ar[1]
+
+for (t in seq_len(n_series_acf)) {
+  previous <- rho_initial * previous +
+    sqrt(1 - rho_initial^2) * innov_ar[t, 1]
+  ar_initial[t] <- previous
+}
+
+# Keep the original common vertical scale across all persistence values.
+max_abs <- max(abs(innov_wn))
+
+for (rho in rho_values_emp) {
   previous <- initials_ar
   sd_innov <- sqrt(1 - rho^2)
   
   for (t in seq_len(n_series_acf)) {
     previous <- rho * previous + sd_innov * innov_ar[t, ]
-    x[t, ] <- previous
+    max_abs <- max(max_abs, abs(previous))
   }
-  
-  x
-})
-
-emp_acf <- function(x, lag_max) {
-  as.numeric(acf(x, plot = FALSE, lag.max = lag_max)$acf[-1])
 }
 
-wn_acf_emp <- t(apply(wn_paths, 2, emp_acf, lag_max = lag_max_acf))
-
-ar_acf_emp <- lapply(ar_paths_emp, function(z) {
-  t(apply(z, 2, emp_acf, lag_max = lag_max_acf))
-})
-
-traj_lim <- max(
-  3.5,
-  1.08 * max(abs(c(wn_paths, unlist(ar_paths_emp))))
-)
+traj_lim <- max(3.5, 1.08 * max_abs)
 traj_range <- c(-traj_lim, traj_lim)
 
-wn_paths_js <- lapply(seq_len(n_paths_acf), function(j) {
-  unname(round(wn_paths[, j], 5))
-})
+### Binary simulation asset ----
 
-ar_paths_js <- lapply(ar_paths_emp, function(z) {
-  lapply(seq_len(ncol(z)), function(j) {
-    unname(round(z[, j], 5))
-  })
-})
+asset_dir <- "figures/02/empirical-acf-assets"
+dir.create(asset_dir, recursive = TRUE, showWarnings = FALSE)
 
-wn_acf_js <- lapply(seq_len(n_paths_acf), function(j) {
-  unname(round(wn_acf_emp[j, ], 5))
-})
+# R matrices are column-major: one complete path follows another.
+# Store white-noise innovations, AR(1) innovations, then initial states.
+values <- c(innov_wn, innov_ar, initials_ar)
+con <- file(file.path(asset_dir, "innovations.bin"), "wb")
+writeBin(values, con, size = 4, endian = "little")
+close(con)
 
-ar_acf_js <- lapply(ar_acf_emp, function(z) {
-  lapply(seq_len(nrow(z)), function(j) {
-    unname(round(z[j, ], 5))
-  })
-})
+writeLines(
+  'window.drpEmpiricalAcf02Base = new URL(".", document.currentScript.src).href;',
+  file.path(asset_dir, "loader.js"),
+  useBytes = TRUE
+)
+
+emp_acf_dep <- htmltools::htmlDependency(
+  name = "drp-empirical-acf-02",
+  version = "1.0.0",
+  src = c(file = normalizePath(asset_dir, winslash = "/")),
+  script = "loader.js",
+  all_files = TRUE
+)
+
+### Plot ----
 
 p7 <- plotly::plot_ly()
 
 p7 <- plotly::add_trace(
   p7,
-  x = numeric(0),
-  y = numeric(0),
-  type = "scattergl",
-  mode = "lines",
-  xaxis = "x",
-  yaxis = "y",
+  x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x", yaxis = "y",
   line = list(color = "rgba(1,0,202,0.08)", width = 1),
-  hoverinfo = "skip",
-  showlegend = FALSE,
-  inherit = FALSE
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = seq_len(n_series_acf),
-  y = wn_paths_js[[1]],
-  type = "scatter",
-  mode = "lines",
-  xaxis = "x",
-  yaxis = "y",
+  x = seq_len(n_series_acf), y = wn_initial,
+  type = "scatter", mode = "lines",
+  xaxis = "x", yaxis = "y",
   line = list(color = "#0100CA", width = 1.8),
   hovertemplate = "Observation: %{x}<br>Value: %{y:.2f}<extra></extra>",
-  showlegend = FALSE,
-  inherit = FALSE
+  showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = numeric(0),
-  y = numeric(0),
-  type = "scattergl",
-  mode = "lines",
-  xaxis = "x2",
-  yaxis = "y2",
+  x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
   line = list(color = "rgba(196,91,64,0.08)", width = 1),
-  hoverinfo = "skip",
-  showlegend = FALSE,
-  inherit = FALSE
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = seq_len(n_series_acf),
-  y = ar_paths_js[[rho_start_emp]][[1]],
-  type = "scatter",
-  mode = "lines",
-  xaxis = "x2",
-  yaxis = "y2",
+  x = seq_len(n_series_acf), y = ar_initial,
+  type = "scatter", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
   line = list(color = "#C45B40", width = 1.8),
   hovertemplate = "Observation: %{x}<br>Value: %{y:.2f}<extra></extra>",
-  showlegend = FALSE,
-  inherit = FALSE
+  showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = numeric(0),
-  y = numeric(0),
-  type = "scatter",
-  mode = "lines",
-  xaxis = "x3",
-  yaxis = "y3",
+  x = numeric(0), y = numeric(0),
+  type = "scatter", mode = "lines",
+  xaxis = "x3", yaxis = "y3",
   line = list(color = "rgba(1,0,202,0.10)", width = 1),
-  hoverinfo = "skip",
-  showlegend = FALSE,
-  inherit = FALSE
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = lags_acf,
-  y = wn_acf_js[[1]],
-  type = "scatter",
-  mode = "lines+markers",
-  xaxis = "x3",
-  yaxis = "y3",
+  x = lags_acf, y = emp_acf(wn_initial),
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x3", yaxis = "y3",
   line = list(color = "#0100CA", width = 2),
   marker = list(color = "#0100CA", size = 5),
   hovertemplate = "Lag: %{x}<br>Empirical ACF: %{y:.3f}<extra></extra>",
-  showlegend = FALSE,
-  inherit = FALSE
+  showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = numeric(0),
-  y = numeric(0),
-  type = "scatter",
-  mode = "lines",
-  xaxis = "x4",
-  yaxis = "y4",
+  x = numeric(0), y = numeric(0),
+  type = "scatter", mode = "lines",
+  xaxis = "x4", yaxis = "y4",
   line = list(color = "rgba(196,91,64,0.10)", width = 1),
-  hoverinfo = "skip",
-  showlegend = FALSE,
-  inherit = FALSE
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
 )
 
 p7 <- plotly::add_trace(
   p7,
-  x = lags_acf,
-  y = ar_acf_js[[rho_start_emp]][[1]],
-  type = "scatter",
-  mode = "lines+markers",
-  xaxis = "x4",
-  yaxis = "y4",
+  x = lags_acf, y = emp_acf(ar_initial),
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x4", yaxis = "y4",
   line = list(color = "#C45B40", width = 2),
   marker = list(color = "#C45B40", size = 5),
   hovertemplate = "Lag: %{x}<br>Empirical ACF: %{y:.3f}<extra></extra>",
-  showlegend = FALSE,
-  inherit = FALSE
+  showlegend = FALSE, inherit = FALSE
 )
 
 rho_steps_emp <- lapply(rho_values_emp, function(z) {
@@ -2048,108 +2022,72 @@ p7 <- plotly::layout(
     font = list(size = 21, color = "#000000")
   ),
   xaxis = list(
-    domain = c(0.08, 0.46),
-    anchor = "y",
-    range = c(1, n_series_acf),
-    title = "",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = FALSE
+    domain = c(0.08, 0.46), anchor = "y",
+    range = c(1, n_series_acf), title = "",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
   ),
   yaxis = list(
-    domain = c(0.62, 0.92),
-    anchor = "x",
-    range = traj_range,
-    title = "Value",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = TRUE,
+    domain = c(0.62, 0.92), anchor = "x",
+    range = traj_range, title = "Value", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = TRUE,
     zerolinecolor = "#A0A5B5"
   ),
   xaxis2 = list(
-    domain = c(0.58, 0.96),
-    anchor = "y2",
-    range = c(1, n_series_acf),
-    title = "",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = FALSE
+    domain = c(0.58, 0.96), anchor = "y2",
+    range = c(1, n_series_acf), title = "",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
   ),
   yaxis2 = list(
-    domain = c(0.62, 0.92),
-    anchor = "x2",
-    range = traj_range,
-    title = "Value",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = TRUE,
+    domain = c(0.62, 0.92), anchor = "x2",
+    range = traj_range, title = "Value", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = TRUE,
     zerolinecolor = "#A0A5B5"
   ),
   xaxis3 = list(
-    domain = c(0.08, 0.46),
-    anchor = "y3",
-    range = c(1, lag_max_acf),
-    dtick = 2,
-    title = "Lag h",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = FALSE
+    domain = c(0.08, 0.46), anchor = "y3",
+    range = c(1, lag_max_acf), dtick = 2,
+    title = "Lag h", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
   ),
   yaxis3 = list(
-    domain = c(0.13, 0.47),
-    anchor = "x3",
-    range = c(-1.05, 1.05),
-    title = "Empirical ACF",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = TRUE,
+    domain = c(0.13, 0.47), anchor = "x3",
+    range = c(-1.05, 1.05), title = "Empirical ACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = TRUE,
     zerolinecolor = "#A0A5B5"
   ),
   xaxis4 = list(
-    domain = c(0.58, 0.96),
-    anchor = "y4",
-    range = c(1, lag_max_acf),
-    dtick = 2,
-    title = "Lag h",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = FALSE
+    domain = c(0.58, 0.96), anchor = "y4",
+    range = c(1, lag_max_acf), dtick = 2,
+    title = "Lag h", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
   ),
   yaxis4 = list(
-    domain = c(0.13, 0.47),
-    anchor = "x4",
-    range = c(-1.05, 1.05),
-    title = "Empirical ACF",
-    fixedrange = TRUE,
-    gridcolor = "#E4E6F2",
-    zeroline = TRUE,
+    domain = c(0.13, 0.47), anchor = "x4",
+    range = c(-1.05, 1.05), title = "Empirical ACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = TRUE,
     zerolinecolor = "#A0A5B5"
   ),
   annotations = list(
     list(
-      x = 0.08, y = 0.965,
-      xref = "paper", yref = "paper",
+      x = 0.08, y = 0.965, xref = "paper", yref = "paper",
       text = "<b>Gaussian white noise</b>",
       showarrow = FALSE, xanchor = "left",
       font = list(size = 13, color = "#000000")
     ),
     list(
-      x = 0.58, y = 0.965,
-      xref = "paper", yref = "paper",
+      x = 0.58, y = 0.965, xref = "paper", yref = "paper",
       text = "<b>Stationary AR(1)</b>",
       showarrow = FALSE, xanchor = "left",
       font = list(size = 13, color = "#000000")
     ),
     list(
-      x = 0.08, y = 0.53,
-      xref = "paper", yref = "paper",
+      x = 0.08, y = 0.53, xref = "paper", yref = "paper",
       text = "<b>Empirical autocorrelation</b>",
       showarrow = FALSE, xanchor = "left",
       font = list(size = 13, color = "#000000")
     ),
     list(
-      x = 0.58, y = 0.53,
-      xref = "paper", yref = "paper",
+      x = 0.58, y = 0.53, xref = "paper", yref = "paper",
       text = "<b>Empirical autocorrelation</b>",
       showarrow = FALSE, xanchor = "left",
       font = list(size = 13, color = "#000000")
@@ -2159,33 +2097,21 @@ p7 <- plotly::layout(
     active = rho_start_emp - 1,
     steps = rho_steps_emp,
     currentvalue = list(prefix = "Persistence rho = "),
-    x = 0.14,
-    len = 0.72,
-    y = 0.045,
+    x = 0.14, len = 0.72, y = 0.045,
     pad = list(t = 30)
   )),
   updatemenus = list(
     list(
-      type = "buttons",
-      direction = "right",
-      buttons = mode_buttons_emp,
-      active = 0,
-      showactive = TRUE,
-      x = 0.28,
-      xanchor = "center",
-      y = -0.2,
-      yanchor = "middle"
+      type = "buttons", direction = "right",
+      buttons = mode_buttons_emp, active = 0,
+      showactive = TRUE, x = 0.28, xanchor = "center",
+      y = -0.2, yanchor = "middle"
     ),
     list(
-      type = "buttons",
-      direction = "right",
-      buttons = next_button_emp,
-      active = -1,
-      showactive = FALSE,
-      x = 0.74,
-      xanchor = "center",
-      y = -0.2,
-      yanchor = "middle"
+      type = "buttons", direction = "right",
+      buttons = next_button_emp, active = -1,
+      showactive = FALSE, x = 0.74, xanchor = "center",
+      y = -0.2, yanchor = "middle"
     )
   ),
   autosize = TRUE,
@@ -2201,13 +2127,90 @@ p7 <- plotly::config(
   displaylogo = FALSE
 )
 
+### Interactivity ----
+
+p7$dependencies <- c(p7$dependencies, list(emp_acf_dep))
+
 p7 <- htmlwidgets::onRender(
   p7,
   "
   function(el, x, data) {
+    var n = data.nSeries;
+    var nPaths = data.nPaths;
+    var lagMax = data.lagMax;
+    var blockSize = n * nPaths;
     var rhoIndex = data.rhoStart;
     var highlight = 0;
     var showAll = false;
+    var raw = null;
+    var wnPaths = null;
+    var wnAcf = null;
+    var arCache = new Array(data.rhoLabels.length);
+    var times = Array.from({length: n}, function(_, i) { return i + 1; });
+    var lags = Array.from({length: lagMax}, function(_, i) { return i + 1; });
+
+    function sampleAcf(series) {
+      var mean = 0;
+      for (var i = 0; i < n; i++) mean += series[i];
+      mean /= n;
+
+      var centered = new Array(n);
+      var denom = 0;
+      for (var i = 0; i < n; i++) {
+        var d = series[i] - mean;
+        centered[i] = d;
+        denom += d * d;
+      }
+
+      var result = new Array(lagMax);
+      for (var h = 1; h <= lagMax; h++) {
+        var numer = 0;
+        for (var t = h; t < n; t++) {
+          numer += centered[t] * centered[t - h];
+        }
+        result[h - 1] = denom ? numer / denom : 0;
+      }
+      return result;
+    }
+
+    function buildWhiteNoise() {
+      wnPaths = new Array(nPaths);
+      wnAcf = new Array(nPaths);
+      for (var j = 0; j < nPaths; j++) {
+        var path = new Array(n);
+        for (var t = 0; t < n; t++) {
+          path[t] = raw[j * n + t];
+        }
+        wnPaths[j] = path;
+        wnAcf[j] = sampleAcf(path);
+      }
+    }
+
+    function getAr(r) {
+      if (arCache[r]) return arCache[r];
+
+      var rho = Number(data.rhoLabels[r]);
+      var sigma = Math.sqrt(1 - rho * rho);
+      var paths = new Array(nPaths);
+      var acfs = new Array(nPaths);
+
+      for (var j = 0; j < nPaths; j++) {
+        var state = raw[2 * blockSize + j];
+        var path = new Array(n);
+        var offset = blockSize + j * n;
+
+        for (var t = 0; t < n; t++) {
+          state = rho * state + sigma * raw[offset + t];
+          path[t] = state;
+        }
+
+        paths[j] = path;
+        acfs[j] = sampleAcf(path);
+      }
+
+      arCache[r] = {paths: paths, acfs: acfs};
+      return arCache[r];
+    }
 
     function stackSeries(series, xvals, omit) {
       var xs = [];
@@ -2227,49 +2230,27 @@ p7 <- htmlwidgets::onRender(
     }
 
     function updatePlot() {
-      var trajX = Array.from(
-        {length: data.nSeries},
-        function(_, i) { return i + 1; }
-      );
+      if (!raw) return;
 
+      var ar = getAr(rhoIndex);
       var wnBg = showAll
-        ? stackSeries(data.wnPaths, trajX, highlight)
-        : {x: [], y: []};
-
+        ? stackSeries(wnPaths, times, highlight) : {x: [], y: []};
       var arBg = showAll
-        ? stackSeries(data.arPaths[rhoIndex], trajX, highlight)
-        : {x: [], y: []};
-
+        ? stackSeries(ar.paths, times, highlight) : {x: [], y: []};
       var wnAcfBg = showAll
-        ? stackSeries(data.wnAcf, data.lags, highlight)
-        : {x: [], y: []};
-
+        ? stackSeries(wnAcf, lags, highlight) : {x: [], y: []};
       var arAcfBg = showAll
-        ? stackSeries(data.arAcf[rhoIndex], data.lags, highlight)
-        : {x: [], y: []};
+        ? stackSeries(ar.acfs, lags, highlight) : {x: [], y: []};
 
       Plotly.update(
         el,
         {
-          x: [
-            wnBg.x,
-            trajX,
-            arBg.x,
-            trajX,
-            wnAcfBg.x,
-            data.lags,
-            arAcfBg.x,
-            data.lags
-          ],
+          x: [wnBg.x, times, arBg.x, times, wnAcfBg.x, lags, arAcfBg.x, lags],
           y: [
-            wnBg.y,
-            data.wnPaths[highlight],
-            arBg.y,
-            data.arPaths[rhoIndex][highlight],
-            wnAcfBg.y,
-            data.wnAcf[highlight],
-            arAcfBg.y,
-            data.arAcf[rhoIndex][highlight]
+            wnBg.y, wnPaths[highlight],
+            arBg.y, ar.paths[highlight],
+            wnAcfBg.y, wnAcf[highlight],
+            arAcfBg.y, ar.acfs[highlight]
           ]
         },
         {},
@@ -2278,8 +2259,7 @@ p7 <- htmlwidgets::onRender(
     }
 
     el.on('plotly_sliderchange', function(e) {
-      var label = String(e.step.label);
-      var r = data.rhoLabels.indexOf(label);
+      var r = data.rhoLabels.indexOf(String(e.step.label));
       if (r >= 0) {
         rhoIndex = r;
         updatePlot();
@@ -2287,39 +2267,56 @@ p7 <- htmlwidgets::onRender(
     });
 
     el.on('plotly_buttonclicked', function(e) {
-      if (e.button.label === 'One realisation') {
-        showAll = false;
-        updatePlot();
-      }
-      if (e.button.label === 'All realisations') {
-        showAll = true;
-        updatePlot();
-      }
+      if (e.button.label === 'One realisation') showAll = false;
+      if (e.button.label === 'All realisations') showAll = true;
       if (e.button.label === 'Next realisation') {
-        highlight = (highlight + 1) % data.nPaths;
-        updatePlot();
+        highlight = (highlight + 1) % nPaths;
       }
+      updatePlot();
     });
 
-    updatePlot();
+    if (!window.drpEmpiricalAcf02Base) {
+      console.error('Figure 7: simulation dependency was not loaded.');
+      return;
+    }
+
+    fetch(new URL('innovations.bin', window.drpEmpiricalAcf02Base))
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.arrayBuffer();
+      })
+      .then(function(buffer) {
+        var expected = 4 * (2 * blockSize + nPaths);
+        if (buffer.byteLength !== expected) {
+          throw new Error('Unexpected binary size: ' + buffer.byteLength);
+        }
+
+        // Explicit little-endian decoding matches writeBin() in R.
+        var view = new DataView(buffer);
+        raw = new Float32Array(expected / 4);
+        for (var i = 0; i < raw.length; i++) {
+          raw[i] = view.getFloat32(4 * i, true);
+        }
+
+        buildWhiteNoise();
+        updatePlot();
+      })
+      .catch(function(error) {
+        console.error('Figure 7: could not load innovations.bin', error);
+      });
   }
   ",
   data = list(
     nSeries = n_series_acf,
     nPaths = n_paths_acf,
-    lags = lags_acf,
+    lagMax = lag_max_acf,
     rhoLabels = as.character(rho_values_emp),
-    rhoStart = rho_start_emp - 1L,
-    wnPaths = wn_paths_js,
-    arPaths = ar_paths_js,
-    wnAcf = wn_acf_js,
-    arAcf = ar_acf_js
+    rhoStart = rho_start_emp - 1L
   )
 )
 
 p7
 saveRDS(p7, "figures/02/empirical-autocorrelation.rds")
-
 
 
 ## Partial autocorrelation ----

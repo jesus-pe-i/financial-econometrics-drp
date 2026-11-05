@@ -5,7 +5,7 @@ project:
   execute-dir: project
 
 website:
-  title: "Financial Econometrics DRP"
+  title: "Applied Financial Econometrics DRP"
 
   navbar:
     left:

@@ -1,4 +1,3 @@
-
 ---
 title: "Stationarity and Time Series Models"
 subtitle: "Session 02"
@@ -1266,8 +1265,6 @@ each observation's deviation from its mean.
 We can calculate the empirical ACF of both $x_t$
 and $q_t$.
 
-::: {#fig-empirical-acf}
-
 ```{r}
 #| label: fig-empirical-acf
 #| fig-cap: "UK year-on-year inflation and SPY daily logarithmic returns, together with their mean-centred squared deviations and empirical ACFs. Dashed lines represent approximate white-noise reference bounds. Lags are measured in months for inflation and trading days for SPY."
@@ -1276,8 +1273,6 @@ and $q_t$.
 
 readRDS("figures/02/empirical-acf.rds")
 ```
-
-:::
 
 In @fig-empirical-acf, the left panels display the
 observed series and their squared deviations,
