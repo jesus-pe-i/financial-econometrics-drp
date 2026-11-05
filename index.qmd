@@ -11,7 +11,7 @@ toc: false
 Imperial College London · 2026
 </div>
 
-# Financial Econometrics
+# Applied Financial Econometrics
 
 <div class="course-subtitle">
 Can we predict financial market turbulence?

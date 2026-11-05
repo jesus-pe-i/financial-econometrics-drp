@@ -31,3 +31,7 @@ Thumbs.db
 # Windows metadata
 desktop.ini
 Thumbs.db
+
+# Local financial and macroeconomic datasets
+intraday_data/
+/data/
