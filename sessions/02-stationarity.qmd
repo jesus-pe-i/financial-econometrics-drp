@@ -623,7 +623,7 @@ but several extend back to the early 1970s.
 
 ```{r}
 #| fig-width: 11
-#| fig-height: 11
+#| fig-height: 10.5
 
 readRDS("figures/02/historical-inflation.rds")
 ```
@@ -1078,7 +1078,7 @@ The ACF of an AR(1) decays gradually, while its PACF
 
 ```{r}
 #| fig-width: 10
-#| fig-height: 9
+#| fig-height: 8.5
 
 readRDS("figures/02/theoretical-acf-pacf.rds")
 ```
@@ -1461,3 +1461,578 @@ Our next question is therefore:
 **Can we construct stochastic models that reproduce
 these dependence structures, and use them to forecast
 future observations?**
+
+# Mean modelling
+
+In the previous sections, we learned how to describe a
+stochastic process, why stationarity matters, and how to
+measure dependence using the autocorrelation function (ACF)
+and partial autocorrelation function (PACF).
+We also encountered a problem: very different stochastic
+processes can produce similar-looking trajectories, and
+observations can be dependent even when the underlying
+variance is constant.
+
+We are now ready to move from *describing* time series
+to constructing models for them.
+Suppose we want to predict tomorrow's observation using
+what we know today. The simplest starting point is the
+**conditional mean**: the expected value of the next
+observation given the information already available.
+Writing $\mathcal F_{t-1}$ for that information, we can
+express the idea as
+
+$$
+X_t=\mathbb E[X_t\mid\mathcal F_{t-1}]
++\varepsilon_t,
+$$
+
+where $\varepsilon_t$ is the part of $X_t$ that was not
+predictable from the available information.
+We call it an **innovation**.
+For our simulations, the innovations will be independent,
+zero-mean Gaussian random variables.
+
+Our first task is to model the predictable component.
+How should information from previous periods enter
+the conditional mean?
+We will investigate two approaches: one based on
+**previous observations**, and another based on
+**previous innovations**.
+
+## Autoregressive models
+
+The most direct possibility is to predict a series using
+its own past observations.
+An **autoregressive model of order $p$**, or AR($p$),
+is defined by
+
+$$
+X_t=c+\phi_1X_{t-1}+\phi_2X_{t-2}
++\cdots+\phi_pX_{t-p}+\varepsilon_t.
+$$
+
+The coefficients $\phi_1,\ldots,\phi_p$ determine how
+different past observations contribute to the present.
+The order $p$ tells us the most distant lag that can
+enter the equation; it does not mean that all $p$
+coefficients must be large, or even nonzero.
+
+If the innovations have conditional mean zero, which is usually assumed, then
+
+$$
+\mathbb E[X_t\mid\mathcal F_{t-1}]
+=c+\phi_1X_{t-1}+\cdots+\phi_pX_{t-p}.
+$$
+
+In other words, **the autoregressive equation is
+itself a model for the conditional mean**.
+We have already studied AR(1) processes, but what happens
+when we allow more than one lag?
+Our next figure explores a range of stationary
+AR models, from order 1 to order 10.
+
+::: {#fig-ar-explorer}
+
+```{r}
+#| fig-width: 12
+#| fig-height: 9.5
+
+readRDS("figures/02/ar-explorer.rds")
+```
+
+Simulated AR(1)–AR(10) trajectories and their empirical
+ACFs and PACFs. Change the model order, coefficient
+structure, signed strength, and sample size. Compare
+one realisation with all 100, or move to the next
+realisation.
+
+:::
+
+Start with **AR(1)** in @fig-ar-explorer.
+Increase the signed strength towards $0.95$.
+The series often moves through sustained periods above
+or below zero, and its ACF decays slowly.
+Now move towards $-0.95$.
+The relationship changes: large positive observations
+tend to be followed by large negative ones, and vice
+versa. Strong dependence does not have to be positive.
+
+Next, increase the order and explore the three
+coefficient structures:
+
+- **Recent lags:** most of the coefficient weight is
+  concentrated on the immediately preceding observation.
+- **Distributed lags:** several lagged observations
+  contribute to the dynamics. For negative strength,
+  the coefficients alternate in sign.
+- **Distant lag:** dependence is placed entirely on
+  the observation $p$ periods ago.
+
+For instance, choose **AR(10)**, **Distant lag**, and a
+signed strength of $-0.95$.
+The generating equation becomes
+
+$$
+X_t=-0.95X_{t-10}+\varepsilon_t.
+$$
+
+Here, the theoretical autocorrelation at lag 10 is
+$-0.95$, even though the theoretical autocorrelations
+at lags 1 through 9 are zero.
+The order of a process therefore tells us **which lags
+can enter the model directly**, not where its strongest
+correlation must occur.
+
+The signed-strength control is a convenient way to
+explore selected coefficient families, not a direct
+measure of autocorrelation. Only in the AR(1) case
+does it coincide with the lag-one autocorrelation.
+The figures illustrate some stationary AR models,
+not every possible combination of AR coefficients.
+
+Compare the two lower panels. For a stationary AR($p$),
+its **population ACF can extend beyond lag $p$**, while
+its **population PACF is zero beyond lag $p$**.
+That is the contrast we anticipated when we introduced
+the PACF.
+But these panels contain *empirical estimates*, not
+population quantities. With a finite sample, even
+lags whose theoretical correlation is zero will not
+generally have estimated values exactly equal to zero.
+
+Select **All realisations** to see how much the sample
+ACF and PACF vary across trajectories generated by the
+same model. Then increase the sample size.
+This is another reminder that an apparent pattern in
+one trajectory is not necessarily a reliable description
+of the underlying DGP.
+
+::: {.callout-note title="Discussion: exploring autoregression"}
+
+- How does increasing the AR(1) coefficient towards
+   one affect the trajectory and the ACF? What changes
+   when the coefficient is negative?
+
+- Can an AR(10) exhibit strong autocorrelation at lag
+   10 while having very little autocorrelation at lag 1?
+   Which coefficient structure makes this easiest to see?
+
+- Compare the empirical ACF and PACF of AR(1), AR(3),
+   and AR(10). Which one tends to reveal the model order
+   more clearly?
+
+- Keep the model fixed and switch between realisations.
+   Why do the empirical ACF and PACF change? Does a
+   larger sample make the model easier to recognise?
+
+:::
+
+There is a further detail worth noticing.
+With a strongly negative AR(1) coefficient, an unusually
+large positive observation can be followed by several
+large observations of alternating sign.
+If we looked only at their magnitudes, we might mistake
+the resulting pattern for a burst of changing volatility.
+Yet for an AR(1) with independent innovations of constant
+variance,
+
+$$
+\operatorname{Var}(X_t\mid\mathcal F_{t-1})
+=\operatorname{Var}(\varepsilon_t)
+=\sigma_\varepsilon^2.
+$$
+
+The conditional mean changes, but the conditional
+variance does not.
+**Clustering of large observations does not, by itself,
+prove that conditional uncertainty is changing.**
+We will return to this distinction when we model volatility.
+
+Autoregression gives us a remarkably flexible way to
+describe temporal dependence. But the current observation
+need not depend only on earlier *observations*.
+It can also depend on surprises that occurred in
+earlier periods.
+
+## Moving-average models
+
+Consider a process whose current value combines a new
+innovation with innovations from the recent past.
+A **moving-average model of order $q$**, or MA($q$),
+is defined by
+
+$$
+X_t=\mu+\varepsilon_t
++\theta_1\varepsilon_{t-1}
++\theta_2\varepsilon_{t-2}
++\cdots+\theta_q\varepsilon_{t-q}.
+$$
+
+The fundamental difference is the source of dependence.
+In an AR model, earlier **observations** enter the equation.
+In an MA model, earlier **innovations** enter the equation.
+These innovations are the unpredictable changes driving
+the process; they are not generally observed directly.
+
+Despite the name, an MA($q$) is not simply the moving
+average of the last $q$ observed data points.
+It is a *finite linear combination of current and past
+innovations*, with coefficients that need not be positive
+or equal.
+For our simulations, we again use independent Gaussian
+innovations. We explore MA models from order 1 to 10,
+using three illustrative ways of distributing their
+coefficients across lags.
+
+::: {#fig-ma-explorer}
+
+```{r}
+#| fig-width: 11
+#| fig-height: 9.5
+
+readRDS("figures/02/ma-explorer.rds")
+```
+
+Simulated MA(1)–MA(10) trajectories and their empirical
+ACFs and PACFs. Explore recent-shock, distributed-shock,
+and distant-shock coefficient structures, adjust signed
+shock strength and sample size, and compare up to 100
+realisations.
+
+:::
+
+Begin with **MA(1)** in @fig-ma-explorer.
+The model is particularly simple:
+
+$$
+X_t=\varepsilon_t+\theta\varepsilon_{t-1}.
+$$
+
+Two neighbouring observations can depend on the same
+innovation. However, observations separated by two or
+more periods depend on disjoint sets of independent
+innovations. Their theoretical autocorrelation is zero.
+
+More generally, an MA($q$) has
+
+$$
+\rho_X(h)=0\qquad\text{for }h>q.
+$$
+
+This is the defining visual difference from the AR
+examples: **the population ACF of an MA model cuts off
+after a finite number of lags**.
+Its population PACF, on the other hand, generally
+decays rather than cutting off.
+
+Try **MA(10)** with the **Distant lag** structure.
+The model becomes
+
+$$
+X_t=\varepsilon_t+\theta\varepsilon_{t-10}.
+$$
+
+The population ACF is zero at lags 1 through 9,
+but can be substantial at lag 10.
+Now choose **Distributed lags** and observe how
+correlations can appear across several consecutive
+lags instead. The available coefficient structures are
+illustrative examples, not all possible MA models.
+
+The controls again display empirical ACFs and PACFs.
+Even if a population ACF is exactly zero beyond $q$,
+its finite-sample estimates will fluctuate around zero.
+Select **All realisations** and change the sample size
+to see the resulting sampling variability.
+
+There is one more surprising property of MA(1).
+With independent innovations of common variance,
+
+$$
+\rho_X(1)=\frac{\theta}{1+\theta^2},
+\qquad
+\rho_X(h)=0\quad(h\geq2).
+$$
+
+Consequently,
+
+$$
+|\rho_X(1)|\leq\frac12.
+$$
+
+An MA(1) cannot produce arbitrarily strong lag-one
+autocorrelation, no matter how large its coefficient
+is. This does not make MA models weak: higher-order
+MA models can have quite different dependence
+structures. It tells us that **model order, coefficient
+magnitude, and autocorrelation strength are distinct
+concepts**.
+
+::: {.callout-note title="Discussion: exploring moving averages"}
+
+- Compare MA(1) and AR(1). What happens to the ACF
+   beyond lag one? How do their PACFs differ?
+
+- For MA(10), can you find a model with strong
+   correlation at lag 10 but little correlation at
+   shorter lags? What happens when you change the sign?
+
+- Why are the empirical ACF estimates beyond lag $q$
+   not exactly zero? Does increasing the sample size
+   help reveal the theoretical cutoff?
+
+- Experiment with MA(1). Can you obtain a lag-one
+   autocorrelation larger than $0.5$ in magnitude
+   in the population? What about an empirical estimate
+   from a short sample?
+
+:::
+
+We now have two families that can produce many
+interesting dependence patterns.
+The AR zoo was already flexible enough to imitate a
+wide variety of trajectories, so why bother introducing
+MA models at all?
+The next two figures give us two complementary answers:
+**the way shocks propagate** and **the number of
+parameters needed to describe a dependence structure**.
+
+## Why moving averages?
+
+### How does a shock propagate?
+
+Let us compare two very simple processes, using the
+same coefficient $a$ and the same innovations:
+
+$$
+\begin{aligned}
+\text{AR(1):}\quad
+X_t&=aX_{t-1}+\varepsilon_t,\\
+\text{MA(1):}\quad
+Y_t&=\varepsilon_t+a\varepsilon_{t-1}.
+\end{aligned}
+$$
+
+Imagine generating a trajectory from each process.
+Now repeat the experiment with exactly the same
+innovations, except that at one particular time $t_0$
+we increase the innovation by an amount $\delta$.
+
+This creates a **counterfactual experiment**.
+For each model we have two trajectories: the original
+one, and the trajectory that would have occurred if
+one innovation had been different. Everything else,
+including all subsequent innovations, remains the same.
+
+::: {#fig-shock-propagation}
+
+```{r}
+#| fig-width: 11
+#| fig-height: 9.5
+
+readRDS("figures/02/shock-propagation.rds")
+```
+
+Counterfactual response to one additional innovation
+at observation 15. The upper panels compare the
+original and shocked trajectories of AR(1) and MA(1)
+using the same underlying innovations. The lower panel
+isolates the effect of the additional shock. Adjust
+the signed coefficient and shock magnitude, or select
+another background realisation.
+
+:::
+
+In @fig-shock-propagation, start with $a=0.9$ and an
+additional innovation of $\delta=5$.
+Both models jump by 5 units at $t_0$, and both carry an
+additional 4.5 units into the next observation.
+After that, their responses separate.
+In the AR(1), the added effect is
+
+$$
+\delta,\quad a\delta,\quad a^2\delta,
+\quad a^3\delta,\ldots
+$$
+
+The model repeatedly transmits the shock through its
+previous observations. For $|a|<1$ the impact decays,
+but it does not disappear after a fixed number of
+periods unless $a=0$.
+In the MA(1), the added effect is
+
+$$
+\delta,\quad a\delta,\quad 0,\quad 0,\ldots
+$$
+
+The same innovation contributes directly to two
+observations and then no longer enters the model.
+An MA($q$) generalises this idea: an individual
+innovation affects at most $q+1$ consecutive
+observations.
+
+The random fluctuations in the upper panels can hide
+this distinction. That is why the lower panel plots
+the **shocked trajectory minus the original trajectory**.
+It removes everything except the effect of the
+single additional innovation.
+Try a negative coefficient. The AR response now
+alternates in sign as it decays, while the MA response
+still ends after the second affected observation.
+Then click **Next realisation**.
+The background trajectories change, but the isolated
+shock responses do not: they are determined by the
+model and the size of the added innovation.
+
+::: {.callout-note title="Discussion: a controlled shock experiment"}
+
+What happens when $a$ is close to $-1$?
+Why might the AR(1) trajectory then look like a
+cluster of large financial returns?
+
+:::
+
+### How many coefficients do we need?
+
+The two families differ structurally, but a different
+question matters when we choose a statistical model:
+**Can they describe the same observable dependence,
+and how many parameters would they require?**
+Consider the stationary MA(1)
+
+$$
+X_t=\varepsilon_t+\theta\varepsilon_{t-1}.
+$$
+
+As we have seen, its population ACF has only one
+potentially nonzero positive lag:
+
+$$
+\rho_X(1)=\frac{\theta}{1+\theta^2},
+\qquad \rho_X(h)=0\quad(h\geq2).
+$$
+
+Suppose we instead try to reproduce this ACF with
+an AR model.
+An AR(1) could match the correlation at lag one
+by choosing $\phi=\rho_X(1)$.
+But its correlation at lag two would then be
+$\phi^2$, rather than zero.
+For example, if $\theta=0.9$, the MA(1) has
+$\rho_X(1)\approx0.497$ and $\rho_X(2)=0$.
+The corresponding AR(1) has
+$\rho_X(2)\approx0.247$.
+It matches the first lag but misses the next one.
+
+We can do better by allowing more AR coefficients.
+For each order $p$, the next figure constructs an
+AR($p$) approximation whose first $p$ population
+autocorrelations match those of the selected MA(1).
+There are no simulated sample paths here: everything
+shown is a *population quantity*.
+
+::: {#fig-ma-vs-ar-parsimony}
+
+```{r}
+#| fig-width: 11
+#| fig-height: 9
+
+readRDS("figures/02/ma-vs-ar-parsimony.rds")
+```
+
+Population ACF of an MA(1) and its AR($p$)
+approximation, together with the coefficients of the
+AR approximation. Change the MA coefficient $\theta$
+and increase the approximating AR order from 1 to 10.
+The AR coefficients are chosen to match the first
+$p$ population autocorrelations of the MA(1).
+
+:::
+
+In @fig-ma-vs-ar-parsimony, begin with $\theta=0.9$
+and $p=1$.
+The two ACFs agree at lag one, but diverge afterwards.
+Increase the AR order gradually.
+The approximation improves, while the lower panel
+shows the increasingly long sequence of coefficients
+used to achieve it.
+
+The result is not a coincidence.
+For $|\theta|<1$, an MA(1) has an infinite-order
+AR representation:
+
+$$
+X_t=\theta X_{t-1}-\theta^2X_{t-2}
++\theta^3X_{t-3}-\cdots+\varepsilon_t.
+$$
+
+The terms continue indefinitely, although their
+magnitudes decay when $|\theta|<1$.
+The figure does not merely truncate this expansion:
+it constructs the AR($p$) that matches the first
+$p$ population autocorrelations of the MA(1).
+Both calculations express the same broader idea:
+**a simple MA process can require many AR terms
+to describe its dependence accurately**.
+
+Try decreasing the MA coefficient towards zero.
+Does the AR approximation become easier?
+Now increase its magnitude towards $0.95$ and
+consider why a finite-order approximation may
+need more terms.
+Experiment with negative values as well.
+
+There is an important qualification.
+We are comparing the usual **unrestricted** AR($p$)
+family, with $p$ separate coefficients, against an
+MA(1) with a single coefficient. If we imposed
+special restrictions on the AR coefficients, we could
+also describe some of these approximations with fewer
+free parameters.
+Nor does this figure prove that an MA model will
+always forecast better: actual forecasting performance
+depends on the unknown DGP, the estimation procedure,
+the sample size, and the data available.
+
+What it does demonstrate is the principle of
+**parsimony**: if two models describe the same features
+of a series comparably well, we often prefer the one
+that achieves this with a simpler representation.
+
+::: {.callout-note title="Discussion: why choose MA rather than AR?"}
+
+1. With $\theta=0.9$, what does an AR(1) get wrong
+   about the MA(1) ACF? How does the approximation
+   change when you increase $p$?
+
+2. Compare $\theta=0.3$ and $\theta=0.95$.
+   For which one does the AR approximation converge
+   more quickly over the displayed lags?
+
+3. Does a small difference between two population
+   ACFs guarantee that the models will be equally
+   successful at forecasting a finite sample?
+
+4. Can you articulate two *different* reasons
+   for using an MA model: one about the propagation
+   of innovations and another about parsimony?
+
+:::
+
+We have now seen that autoregressive and moving-average
+models provide two ways of constructing temporal
+dependence. An AR model uses previous observations;
+an MA model combines current and previous innovations.
+Their shock responses differ, yet they can produce
+similar autocorrelation patterns.
+
+This suggests a natural next step.
+Rather than insisting on one mechanism or the other,
+**what if we allowed both previous observations and
+previous innovations to influence the current value?**
+That is the idea behind autoregressive moving-average
+(ARMA) models.
+
+
+

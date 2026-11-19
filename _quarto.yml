@@ -16,9 +16,9 @@ website:
         menu:
           - text: "01 — Financial Stylised Facts"
             href: sessions/01-stylised-facts.qmd
-          - text: "02 — Stationarity"
+          - text: "02 — Stationarity and Time Series Models"
             href: sessions/02-stationarity.qmd
-          - text: "03 — Measuring Volatility"
+          - text: "03 — Measuring and Forecasting Volatility"
             href: sessions/03-measuring-volatility.qmd
           - text: "04 — GARCH Models"
             href: sessions/04-garch.qmd
