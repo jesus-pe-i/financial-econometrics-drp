@@ -2304,14 +2304,13 @@ We compare four forecasting approaches:
 - **ARIMA(1,1,1):** model first differences of
   inflation using an ARMA(1,1) process.
 
-At every forecast origin, we estimate each applicable
-model using both the **previous 48 monthly observations**
-and the **full previous expanding data**,
-including the observation at the origin. The windows
-moves forward one month at a time. In other words, the
-models are repeatedly re-estimated and fitted
-once using the entire historical series, depending on
-the setting.
+At every forecast origin, we estimate each model
+using one of two estimation schemes: a rolling
+window containing the latest 48 monthly observations,
+or an expanding window containing all observations
+since the country's selected starting date.
+In both cases, parameters are re-estimated
+as the forecast origin advances month by month.
 
 The five countries begin at different dates. For this
 exercise, their first included observations are August
@@ -2378,11 +2377,11 @@ volatility-forecast evaluation part of the DRP.
 1. Compare 6- and 12-month forecasts after changing
    the forecast origin. Which horizon seems most sensitive?
 
-3. Can the forecast interval become very wide or
+2. Can the forecast interval become very wide or
    unrealistic? Why is this not necessarily evidence
    that the model understands the economic uncertainty?
 
-4. What are the main differences observed between rolling and expanding window forecasting?
+3. What are the main differences observed between rolling and expanding window forecasting?
 
 :::
 
@@ -2506,7 +2505,7 @@ they do not introduce time-varying conditional variance.
 
 :::
 
-### What have we learned about mean models?
+# Looking ahead
 
 We began this session with a fundamental difficulty:
 we observe one realisation, but want to learn about
@@ -2587,3 +2586,43 @@ step towards building models of financial turbulence.
    a short interpretation.
 
 :::
+
+
+
+# References and resources
+
+## Data resources
+
+- [World Bank — Global Database of Inflation](https://www.worldbank.org/en/brief/2025/05/04/inflation-database) — Historical Consumer Price Index (CPI) data used to calculate monthly year-on-year inflation for Japan, the United Kingdom, Mexico, Türkiye, and Brazil.
+
+- [Yahoo Finance](https://finance.yahoo.com/) — Historical financial prices used to construct daily logarithmic returns for the six assets introduced in Session 1.
+
+## Software and R packages
+
+All simulations, statistical analyses, and forecasting experiments in this session were conducted in R.
+
+The following packages were used to estimate time-series models, retrieve data, and produce the figures.
+
+| Package | Purpose |
+|---|---|
+| [stats](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/00Index.html) | ARMA and ARIMA estimation, forecasting, autocorrelation and partial autocorrelation. Included with R. |
+| [quantmod](https://cran.r-project.org/package=quantmod) | Retrieval and preparation of historical financial prices. |
+| [readxl](https://readxl.tidyverse.org/) | Importing historical CPI data from Excel workbooks. |
+| [tsdistributions](https://cran.r-project.org/package=tsdistributions) | Estimation of Student-t distributions for financial returns. |
+| [ggplot2](https://ggplot2.tidyverse.org/) | Static statistical visualisations. |
+| [plotly](https://plotly.com/r/) | Interactive simulations, dependence diagnostics, and forecasting figures. |
+
+The interactive figures additionally use
+[htmlwidgets](https://cran.r-project.org/package=htmlwidgets),
+[htmltools](https://cran.r-project.org/package=htmltools),
+and [jsonlite](https://cran.r-project.org/package=jsonlite)
+for browser interactions and efficient data delivery.
+
+Students interested in reproducing the statistical analyses
+can begin with the functions `arima()`, `acf()`, and `pacf()`
+from R's built-in `stats` package.
+
+The interactive figures and accompanying exercises in this
+session provide the main learning material. The resources
+above are intended as references for students who wish
+to reproduce or extend the examples.
