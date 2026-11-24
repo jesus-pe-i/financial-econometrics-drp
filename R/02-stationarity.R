@@ -5181,3 +5181,2844 @@ p14
 saveRDS(p14, "figures/02/ma-vs-ar-parsimony.rds")
 
 
+## Autoregressive moving-average models ----
+
+### Simulation setup ----
+
+set.seed(2026)
+
+arma_n <- 1000L
+arma_burn <- 600L
+arma_paths <- 100L
+arma_lag_max <- 20L
+arma_max_p <- 3L
+arma_max_q <- 3L
+arma_initial_p <- 1L
+arma_initial_q <- 1L
+arma_initial_level <- "Moderate"
+arma_initial_sign <- "Positive"
+arma_initial_n <- 300L
+
+arma_levels <- c("Weak", "Moderate", "Strong")
+arma_signs <- c("Positive", "Negative")
+
+# AR polynomial: product_j (1 - a_j B)
+# MA polynomial: product_j (1 + b_j B)
+# All |a_j| and |b_j| are below one, ensuring causality and
+# invertibility. Matching signs reinforce rather than cancel
+# the two mechanisms. Negative means predominantly alternating
+# dependence; it does not mean every coefficient is negative.
+arma_factor_values <- list(
+  Weak = list(ar = c(0.18, 0.08, 0.04), ma = c(0.15, 0.07, 0.03)),
+  Moderate = list(ar = c(0.46, 0.20, 0.09), ma = c(0.40, 0.18, 0.08)),
+  Strong = list(ar = c(0.74, 0.30, 0.13), ma = c(0.65, 0.28, 0.12))
+)
+
+arma_expand_factors <- function(factors, multiplier) {
+  polynomial <- 1
+  for (root in factors) {
+    next_polynomial <- numeric(length(polynomial) + 1L)
+    next_polynomial[seq_along(polynomial)] <-
+      next_polynomial[seq_along(polynomial)] + polynomial
+    next_polynomial[seq_along(polynomial) + 1L] <-
+      next_polynomial[seq_along(polynomial) + 1L] +
+      multiplier * root * polynomial
+    polynomial <- next_polynomial
+  }
+  polynomial
+}
+
+arma_coefficients <- function(p, q, level, sign) {
+  stopifnot(
+    p %in% seq_len(arma_max_p),
+    q %in% seq_len(arma_max_q),
+    level %in% arma_levels,
+    sign %in% arma_signs
+  )
+  
+  direction <- if (sign == "Positive") 1 else -1
+  factors <- arma_factor_values[[level]]
+  ar_poly <- arma_expand_factors(direction * factors$ar[seq_len(p)], -1)
+  ma_poly <- arma_expand_factors(direction * factors$ma[seq_len(q)], 1)
+  
+  list(phi = -ar_poly[-1L], theta = ma_poly)
+}
+
+# Scale each DGP to unit unconditional variance so the figure
+# compares dependence patterns without arbitrary scale changes.
+arma_variance_scale <- function(phi, theta, n_impulses = 600L) {
+  p <- length(phi)
+  q <- length(theta) - 1L
+  psi <- numeric(n_impulses)
+  psi[1] <- 1
+  
+  for (h in 1:(n_impulses - 1L)) {
+    direct <- if (h <= q) theta[h + 1L] else 0
+    previous <- seq_len(min(p, h))
+    psi[h + 1L] <- direct + sum(phi[previous] * psi[h - previous + 1L])
+  }
+  
+  sqrt(sum(psi^2))
+}
+
+arma_innov <- matrix(
+  rnorm((arma_n + arma_burn + arma_max_q) * arma_paths),
+  nrow = arma_n + arma_burn + arma_max_q
+)
+
+arma_generate <- function(z, phi, theta) {
+  p <- length(phi)
+  q <- length(theta) - 1L
+  total <- arma_n + arma_burn
+  path <- numeric(total)
+  scale <- arma_variance_scale(phi, theta)
+  
+  for (t in seq_len(total)) {
+    index <- arma_max_q + t
+    value <- z[index]
+    value <- value + sum(theta[-1L] * z[index - seq_len(q)])
+    
+    if (t > 1L) {
+      j <- seq_len(min(p, t - 1L))
+      value <- value + sum(phi[j] * path[t - j])
+    }
+    
+    path[t] <- value
+  }
+  
+  tail(path, arma_n) / scale
+}
+
+arma_initial_coef <- arma_coefficients(
+  arma_initial_p, arma_initial_q,
+  arma_initial_level, arma_initial_sign
+)
+
+arma_initial <- arma_generate(
+  arma_innov[, 1],
+  arma_initial_coef$phi,
+  arma_initial_coef$theta
+)[seq_len(arma_initial_n)]
+
+arma_sample_acf <- function(x) {
+  as.numeric(stats::acf(x, lag.max = arma_lag_max, plot = FALSE)$acf)[-1]
+}
+
+arma_sample_pacf <- function(x) {
+  as.numeric(stats::pacf(x, lag.max = arma_lag_max, plot = FALSE)$acf)
+}
+
+### Binary simulation asset ----
+
+arma_asset_dir <- "figures/02/arma-explorer-assets"
+dir.create(arma_asset_dir, recursive = TRUE, showWarnings = FALSE)
+
+arma_con <- file(file.path(arma_asset_dir, "innovations.bin"), "wb")
+writeBin(as.numeric(arma_innov), arma_con, size = 4, endian = "little")
+close(arma_con)
+
+writeLines(
+  'window.drpARMAExplorer02Base = new URL(".", document.currentScript.src).href;',
+  file.path(arma_asset_dir, "loader.js"),
+  useBytes = TRUE
+)
+
+arma_dependency <- htmltools::htmlDependency(
+  name = "drp-arma-explorer-02",
+  version = "1.0.0",
+  src = c(file = normalizePath(arma_asset_dir, winslash = "/")),
+  script = "loader.js",
+  all_files = TRUE
+)
+
+### Figure ----
+
+arma_lags <- seq_len(arma_lag_max)
+
+arma_stems <- function(values) {
+  list(
+    x = as.vector(rbind(arma_lags, arma_lags, NA_real_)),
+    y = as.vector(rbind(0, values, NA_real_))
+  )
+}
+
+arma_acf0 <- arma_sample_acf(arma_initial)
+arma_pacf0 <- arma_sample_pacf(arma_initial)
+arma_acf_stems <- arma_stems(arma_acf0)
+arma_pacf_stems <- arma_stems(arma_pacf0)
+
+p15 <- plotly::plot_ly()
+
+# A faint ensemble and a highlighted trajectory.
+p15 <- plotly::add_trace(
+  p15, x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x", yaxis = "y",
+  line = list(color = "rgba(1,0,202,0.02)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p15 <- plotly::add_trace(
+  p15, x = seq_len(arma_initial_n), y = arma_initial,
+  type = "scatter", mode = "lines",
+  xaxis = "x", yaxis = "y",
+  line = list(color = "#0100CA", width = 2),
+  hovertemplate = "Observation: %{x}<br>Value: %{y:.2f}<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+# Empirical ACF: background stems, highlighted stems and dots.
+p15 <- plotly::add_trace(
+  p15, x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "rgba(0,140,149,0.08)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p15 <- plotly::add_trace(
+  p15, x = arma_acf_stems$x, y = arma_acf_stems$y,
+  type = "scatter", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "#008C95", width = 2.1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p15 <- plotly::add_trace(
+  p15, x = arma_lags, y = arma_acf0,
+  type = "scatter", mode = "markers",
+  xaxis = "x2", yaxis = "y2",
+  marker = list(color = "#008C95", size = 5),
+  hovertemplate = "Lag: %{x}<br>ACF: %{y:.3f}<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+# Empirical PACF: background stems, highlighted stems and dots.
+p15 <- plotly::add_trace(
+  p15, x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x3", yaxis = "y3",
+  line = list(color = "rgba(196,91,64,0.08)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p15 <- plotly::add_trace(
+  p15, x = arma_pacf_stems$x, y = arma_pacf_stems$y,
+  type = "scatter", mode = "lines",
+  xaxis = "x3", yaxis = "y3",
+  line = list(color = "#C45B40", width = 2.1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p15 <- plotly::add_trace(
+  p15, x = arma_lags, y = arma_pacf0,
+  type = "scatter", mode = "markers",
+  xaxis = "x3", yaxis = "y3",
+  marker = list(color = "#C45B40", size = 5),
+  hovertemplate = "Lag: %{x}<br>PACF: %{y:.3f}<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+arma_models <- expand.grid(
+  p = seq_len(arma_max_p),
+  q = seq_len(arma_max_q)
+)
+
+arma_model_buttons <- lapply(seq_len(nrow(arma_models)), function(i) {
+  list(
+    label = sprintf("ARMA(%d,%d)", arma_models$p[i], arma_models$q[i]),
+    method = "skip", args = list()
+  )
+})
+
+arma_level_buttons <- lapply(arma_levels, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+arma_sign_buttons <- lapply(arma_signs, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+arma_sample_sizes <- seq(100L, arma_n, by = 100L)
+arma_size_steps <- lapply(arma_sample_sizes, function(z) {
+  list(label = as.character(z), method = "skip", args = list())
+})
+
+arma_mode_buttons <- lapply(c("One realisation", "All realisations"), function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+arma_initial_range <- axis_range(arma_initial)
+arma_initial_model_index <- which(
+  arma_models$p == arma_initial_p & arma_models$q == arma_initial_q
+) - 1L
+
+p15 <- plotly::layout(
+  p15,
+  title = list(
+    text = "ARMA models: trajectories and empirical dependence",
+    x = 0.5, font = list(size = 21, color = "#000000")
+  ),
+  xaxis = list(
+    domain = c(0.09, 0.97), anchor = "y",
+    range = c(1, arma_initial_n), title = "",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis = list(
+    domain = c(0.59, 0.93), anchor = "x",
+    range = arma_initial_range, title = "Value",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  xaxis2 = list(
+    domain = c(0.09, 0.47), anchor = "y2",
+    range = c(0.5, arma_lag_max + 0.5), dtick = 2,
+    title = "Lag h", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis2 = list(
+    domain = c(0.14, 0.46), anchor = "x2",
+    range = c(-1.05, 1.05), title = "ACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  xaxis3 = list(
+    domain = c(0.59, 0.97), anchor = "y3",
+    range = c(0.5, arma_lag_max + 0.5), dtick = 2,
+    title = "Lag h", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis3 = list(
+    domain = c(0.14, 0.46), anchor = "x3",
+    range = c(-1.05, 1.05), title = "PACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  annotations = list(
+    list(
+      x = 0.09, y = 0.985, xref = "paper", yref = "paper",
+      text = "<b>Simulated trajectory</b>", showarrow = FALSE,
+      xanchor = "left", font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.09, y = 0.52, xref = "paper", yref = "paper",
+      text = "<b>Empirical ACF</b>", showarrow = FALSE,
+      xanchor = "left", font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.59, y = 0.52, xref = "paper", yref = "paper",
+      text = "<b>Empirical PACF</b>", showarrow = FALSE,
+      xanchor = "left", font = list(size = 13, color = "#000000")
+    )
+  ),
+  sliders = list(
+    list(
+      active = which(arma_sample_sizes == arma_initial_n) - 1L,
+      steps = arma_size_steps,
+      currentvalue = list(prefix = "Sample size n = "),
+      x = 0.12, len = 0.77, y = 0.04, pad = list(t = 25)
+    )
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown", buttons = arma_model_buttons,
+      active = arma_initial_model_index, showactive = TRUE,
+      x = 0.10, xanchor = "left", y = 1.05, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = arma_level_buttons,
+      active = match(arma_initial_level, arma_levels) - 1L,
+      showactive = TRUE,
+      x = 0.32, xanchor = "left", y = 1.05, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = arma_sign_buttons,
+      active = match(arma_initial_sign, arma_signs) - 1L,
+      showactive = TRUE,
+      x = 0.50, xanchor = "left", y = 1.05, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = arma_mode_buttons,
+      active = 0, showactive = TRUE,
+      x = 0.47, xanchor = "center", y = -0.21, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = list(list(
+        label = "Next realisation", method = "skip", args = list()
+      )),
+      active = -1, showactive = FALSE,
+      x = 0.85, xanchor = "center", y = -0.21, yanchor = "middle"
+    )
+  ),
+  autosize = TRUE, height = 900,
+  margin = list(l = 30, r = 35, t = 120, b = 120),
+  paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF"
+)
+
+p15 <- plotly::config(p15, responsive = TRUE, displaylogo = FALSE)
+p15$dependencies <- c(p15$dependencies, list(arma_dependency))
+
+### Interactivity ----
+
+p15 <- htmlwidgets::onRender(
+  p15,
+  "
+  function(el, x, data) {
+    var nMax = data.nMax;
+    var burn = data.burn;
+    var nPaths = data.nPaths;
+    var lagMax = data.lagMax;
+    var qMax = data.qMax;
+    var pathLength = nMax + burn + qMax;
+    var p = data.initialP;
+    var q = data.initialQ;
+    var level = data.initialLevel;
+    var direction = data.initialSign;
+    var sampleSize = data.initialSize;
+    var highlight = 0;
+    var showAll = false;
+    var raw = null;
+    var modelKey = null;
+    var paths = null;
+    var statsKey = null;
+    var acfs = null;
+    var pacfs = null;
+    var times = Array.from({length: nMax}, function(_, i) { return i + 1; });
+    var lags = Array.from({length: lagMax}, function(_, i) { return i + 1; });
+
+    function expandFactors(factors, multiplier) {
+      var polynomial = [1];
+      for (var i = 0; i < factors.length; i++) {
+        var next = new Array(polynomial.length + 1).fill(0);
+        for (var j = 0; j < polynomial.length; j++) {
+          next[j] += polynomial[j];
+          next[j + 1] += multiplier * factors[i] * polynomial[j];
+        }
+        polynomial = next;
+      }
+      return polynomial;
+    }
+
+    function coefficients() {
+      var signed = direction === 'Positive' ? 1 : -1;
+      var factors = data.factorValues[level];
+      var arRoots = factors.ar.slice(0, p).map(function(a) { return signed * a; });
+      var maRoots = factors.ma.slice(0, q).map(function(a) { return signed * a; });
+      var arPolynomial = expandFactors(arRoots, -1);
+      var phi = arPolynomial.slice(1).map(function(a) { return -a; });
+      var theta = expandFactors(maRoots, 1);
+      return {phi: phi, theta: theta};
+    }
+
+    function varianceScale(phi, theta) {
+      var psi = new Array(600).fill(0);
+      psi[0] = 1;
+      var orderAR = phi.length;
+      var orderMA = theta.length - 1;
+      var sumSq = 1;
+      for (var h = 1; h < psi.length; h++) {
+        var value = h <= orderMA ? theta[h] : 0;
+        for (var j = 1; j <= Math.min(orderAR, h); j++) {
+          value += phi[j - 1] * psi[h - j];
+        }
+        psi[h] = value;
+        sumSq += value * value;
+      }
+      return Math.sqrt(sumSq);
+    }
+
+    function getPaths() {
+      var key = p + ':' + q + ':' + level + ':' + direction;
+      if (modelKey === key) return paths;
+
+      var coef = coefficients();
+      var phi = coef.phi;
+      var theta = coef.theta;
+      var scale = varianceScale(phi, theta);
+      var result = new Array(nPaths);
+
+      for (var path = 0; path < nPaths; path++) {
+        var out = new Array(nMax);
+        var state = new Array(p).fill(0);
+        var offset = path * pathLength;
+
+        for (var t = 0; t < burn + nMax; t++) {
+          var index = offset + qMax + t;
+          var value = raw[index];
+
+          for (var k = 1; k <= q; k++) {
+            value += theta[k] * raw[index - k];
+          }
+          for (var k = 0; k < p; k++) {
+            value += phi[k] * state[k];
+          }
+          for (var k = p - 1; k > 0; k--) {
+            state[k] = state[k - 1];
+          }
+          state[0] = value;
+          if (t >= burn) out[t - burn] = value / scale;
+        }
+        result[path] = out;
+      }
+
+      modelKey = key;
+      paths = result;
+      return paths;
+    }
+
+    function sampleAcf(series) {
+      var mean = 0;
+      for (var i = 0; i < sampleSize; i++) mean += series[i];
+      mean /= sampleSize;
+      var centered = new Array(sampleSize);
+      var denom = 0;
+      for (var i = 0; i < sampleSize; i++) {
+        centered[i] = series[i] - mean;
+        denom += centered[i] * centered[i];
+      }
+      var result = new Array(lagMax);
+      for (var h = 1; h <= lagMax; h++) {
+        var numer = 0;
+        for (var t = h; t < sampleSize; t++) {
+          numer += centered[t] * centered[t - h];
+        }
+        result[h - 1] = denom > 0 ? numer / denom : 0;
+      }
+      return result;
+    }
+
+    // Durbin-Levinson recursion, consistent with the previous zoos.
+    function samplePacf(acf) {
+      var previous = [];
+      var pacf = [];
+      for (var m = 1; m <= lagMax; m++) {
+        var numer = acf[m - 1];
+        var denom = 1;
+        for (var j = 1; j < m; j++) {
+          numer -= previous[j - 1] * acf[m - j - 1];
+          denom -= previous[j - 1] * acf[j - 1];
+        }
+        var kappa = Math.abs(denom) > 1e-12 ? numer / denom : 0;
+        pacf.push(kappa);
+        var current = new Array(m);
+        for (var j = 1; j < m; j++) {
+          current[j - 1] = previous[j - 1] - kappa * previous[m - j - 1];
+        }
+        current[m - 1] = kappa;
+        previous = current;
+      }
+      return pacf;
+    }
+
+    function stackLines(all, omit) {
+      var xs = [];
+      var ys = [];
+      for (var j = 0; j < all.length; j++) {
+        if (j === omit) continue;
+        for (var i = 0; i < sampleSize; i++) {
+          xs.push(i + 1);
+          ys.push(all[j][i]);
+        }
+        xs.push(null);
+        ys.push(null);
+      }
+      return {x: xs, y: ys};
+    }
+
+    function stackStems(all, omit) {
+      var xs = [];
+      var ys = [];
+      for (var j = 0; j < all.length; j++) {
+        if (j === omit) continue;
+        for (var h = 0; h < lagMax; h++) {
+          xs.push(h + 1, h + 1, null);
+          ys.push(0, all[j][h], null);
+        }
+      }
+      return {x: xs, y: ys};
+    }
+
+    function stems(values) {
+      var xs = [];
+      var ys = [];
+      for (var h = 0; h < lagMax; h++) {
+        xs.push(h + 1, h + 1, null);
+        ys.push(0, values[h], null);
+      }
+      return {x: xs, y: ys};
+    }
+
+    function displayRange(series) {
+      var lo = Infinity;
+      var hi = -Infinity;
+      var first = showAll ? 0 : highlight;
+      var last = showAll ? nPaths - 1 : highlight;
+      for (var j = first; j <= last; j++) {
+        for (var t = 0; t < sampleSize; t++) {
+          var v = series[j][t];
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+      }
+      var pad = Math.max(0.08 * (hi - lo), 0.1);
+      return [lo - pad, hi + pad];
+    }
+
+    function getStatistics(simulated) {
+      var key = modelKey + ':' + sampleSize;
+      if (statsKey !== key) {
+        statsKey = key;
+        acfs = new Array(nPaths);
+        pacfs = new Array(nPaths);
+      }
+
+      function ensure(j) {
+        if (!acfs[j]) {
+          acfs[j] = sampleAcf(simulated[j]);
+          pacfs[j] = samplePacf(acfs[j]);
+        }
+      }
+
+      ensure(highlight);
+      if (showAll) {
+        for (var j = 0; j < nPaths; j++) ensure(j);
+      }
+    }
+
+    function updatePlot() {
+      if (!raw) return;
+      var simulated = getPaths();
+      getStatistics(simulated);
+
+      var trajBg = showAll ? stackLines(simulated, highlight) : {x: [], y: []};
+      var acfBg = showAll ? stackStems(acfs, highlight) : {x: [], y: []};
+      var pacfBg = showAll ? stackStems(pacfs, highlight) : {x: [], y: []};
+      var acfHi = stems(acfs[highlight]);
+      var pacfHi = stems(pacfs[highlight]);
+
+      Plotly.update(
+        el,
+        {
+          x: [trajBg.x, times.slice(0, sampleSize),
+              acfBg.x, acfHi.x, lags, pacfBg.x, pacfHi.x, lags],
+          y: [trajBg.y, simulated[highlight].slice(0, sampleSize),
+              acfBg.y, acfHi.y, acfs[highlight],
+              pacfBg.y, pacfHi.y, pacfs[highlight]]
+        },
+        {
+          'xaxis.range': [1, sampleSize],
+          'yaxis.range': displayRange(simulated)
+        },
+        [0, 1, 2, 3, 4, 5, 6, 7]
+      );
+    }
+
+    el.on('plotly_sliderchange', function(e) {
+      sampleSize = Number(e.step.label);
+      updatePlot();
+    });
+
+    el.on('plotly_buttonclicked', function(e) {
+      var label = e.button.label;
+      if (label.indexOf('ARMA(') === 0) {
+        var values = label.slice(5, -1).split(',');
+        p = Number(values[0]);
+        q = Number(values[1]);
+      } else if (data.levelLabels.indexOf(label) >= 0) {
+        level = label;
+      } else if (data.signLabels.indexOf(label) >= 0) {
+        direction = label;
+      } else if (label === 'One realisation') {
+        showAll = false;
+      } else if (label === 'All realisations') {
+        showAll = true;
+      } else if (label === 'Next realisation') {
+        highlight = (highlight + 1) % nPaths;
+      }
+      updatePlot();
+    });
+
+    if (!window.drpARMAExplorer02Base) {
+      console.error('ARMA explorer: simulation dependency was not loaded.');
+      return;
+    }
+
+    fetch(new URL('innovations.bin', window.drpARMAExplorer02Base))
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.arrayBuffer();
+      })
+      .then(function(buffer) {
+        var expected = 4 * pathLength * nPaths;
+        if (buffer.byteLength !== expected) {
+          throw new Error('Unexpected binary size: ' + buffer.byteLength);
+        }
+        var view = new DataView(buffer);
+        raw = new Float32Array(expected / 4);
+        for (var i = 0; i < raw.length; i++) {
+          raw[i] = view.getFloat32(4 * i, true);
+        }
+        updatePlot();
+      })
+      .catch(function(error) {
+        console.error('ARMA explorer: could not load innovations.bin', error);
+      });
+  }
+  ",
+  data = list(
+    nMax = arma_n,
+    burn = arma_burn,
+    qMax = arma_max_q,
+    nPaths = arma_paths,
+    lagMax = arma_lag_max,
+    factorValues = arma_factor_values,
+    levelLabels = arma_levels,
+    signLabels = arma_signs,
+    initialP = arma_initial_p,
+    initialQ = arma_initial_q,
+    initialLevel = arma_initial_level,
+    initialSign = arma_initial_sign,
+    initialSize = arma_initial_n
+  )
+)
+
+p15
+saveRDS(p15, "figures/02/arma-explorer.rds")
+
+## Integrated models ----
+
+### Simulation setup ----
+
+set.seed(20261119)
+
+arima_n <- 1000L
+arima_burn <- 400L
+arima_paths <- 100L
+arima_initial_n <- 300L
+arima_models <- c(
+  "ARIMA(0,1,0)",
+  "ARIMA(1,1,0)",
+  "ARIMA(0,1,1)",
+  "ARIMA(1,1,1)"
+)
+arima_initial_model <- arima_models[1]
+arima_phi <- 0.70
+arima_theta <- 0.50
+
+# All four models use the same innovations. For comparability,
+# the stationary first differences have population variance one.
+arima_innov <- matrix(
+  rnorm((arima_n + arima_burn) * arima_paths),
+  nrow = arima_n + arima_burn
+)
+
+arima_generate <- function(z, model) {
+  phi <- if (model %in% arima_models[c(2, 4)]) arima_phi else 0
+  theta <- if (model %in% arima_models[c(3, 4)]) arima_theta else 0
+  
+  y <- numeric(length(z))
+  previous_y <- 0
+  previous_z <- 0
+  
+  for (t in seq_along(z)) {
+    y[t] <- phi * previous_y + z[t] + theta * previous_z
+    previous_y <- y[t]
+    previous_z <- z[t]
+  }
+  
+  scale <- sqrt((1 + theta^2 + 2 * phi * theta) / (1 - phi^2))
+  differences <- tail(y, arima_n) / scale
+  
+  list(
+    level = cumsum(differences),
+    differences = differences
+  )
+}
+
+arima_initial <- arima_generate(arima_innov[, 1], arima_initial_model)
+arima_times <- seq_len(arima_initial_n)
+
+arima_range <- function(z, include_zero = FALSE) {
+  if (include_zero) z <- c(z, 0)
+  limits <- range(z, finite = TRUE)
+  padding <- max(0.08 * diff(limits), 0.25)
+  limits + c(-padding, padding)
+}
+
+arima_initial_level_range <- arima_range(
+  arima_initial$level[arima_times], include_zero = TRUE
+)
+arima_initial_difference_range <- arima_range(
+  arima_initial$differences[arima_times], include_zero = TRUE
+)
+
+### Binary simulation asset ----
+
+arima_asset_dir <- "figures/02/arima-differencing-assets"
+dir.create(arima_asset_dir, recursive = TRUE, showWarnings = FALSE)
+
+arima_con <- file(file.path(arima_asset_dir, "innovations.bin"), "wb")
+writeBin(as.numeric(arima_innov), arima_con, size = 4, endian = "little")
+close(arima_con)
+
+writeLines(
+  'window.drpARIMADifferencing02Base = new URL(".", document.currentScript.src).href;',
+  file.path(arima_asset_dir, "loader.js"),
+  useBytes = TRUE
+)
+
+arima_dependency <- htmltools::htmlDependency(
+  name = "drp-arima-differencing-02",
+  version = "1.0.0",
+  src = c(file = normalizePath(arima_asset_dir, winslash = "/")),
+  script = "loader.js",
+  all_files = TRUE
+)
+
+### Figure ----
+
+p16 <- plotly::plot_ly()
+
+# The faint traces hold the other 99 realisations when All is selected.
+p16 <- plotly::add_trace(
+  p16,
+  x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x", yaxis = "y",
+  line = list(color = "rgba(1,0,202,0.02)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p16 <- plotly::add_trace(
+  p16,
+  x = arima_times, y = arima_initial$level[arima_times],
+  type = "scatter", mode = "lines",
+  xaxis = "x", yaxis = "y",
+  line = list(color = "#0100CA", width = 2),
+  hovertemplate = "Observation: %{x}<br>Level: %{y:.2f}<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p16 <- plotly::add_trace(
+  p16,
+  x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "rgba(0,140,149,0.02)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p16 <- plotly::add_trace(
+  p16,
+  x = arima_times, y = arima_initial$differences[arima_times],
+  type = "scatter", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "#008C95", width = 2),
+  hovertemplate = "Observation: %{x}<br>First difference: %{y:.2f}<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+arima_model_buttons <- lapply(arima_models, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+arima_sample_sizes <- seq(100, arima_n, by = 100)
+arima_size_steps <- lapply(arima_sample_sizes, function(z) {
+  list(label = as.character(z), method = "skip", args = list())
+})
+
+arima_mode_buttons <- lapply(c("One realisation", "All realisations"), function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+p16 <- plotly::layout(
+  p16,
+  title = list(
+    text = "ARIMA models: integration and first differences",
+    x = 0.5, font = list(size = 21, color = "#000000")
+  ),
+  xaxis = list(
+    domain = c(0.08, 0.96), anchor = "y",
+    range = c(1, arima_initial_n), title = "Observation",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis = list(
+    domain = c(0.58, 0.91), anchor = "x",
+    range = arima_initial_level_range, title = "Level",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  xaxis2 = list(
+    domain = c(0.08, 0.96), anchor = "y2",
+    range = c(1, arima_initial_n), title = "Observation",
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis2 = list(
+    domain = c(0.15, 0.43), anchor = "x2",
+    range = arima_initial_difference_range, title = "First difference",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  annotations = list(
+    list(
+      x = 0.08, y = 0.98, xref = "paper", yref = "paper",
+      text = "<b>Integrated level: X<sub>t</sub></b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.08, y = 0.50, xref = "paper", yref = "paper",
+      text = "<b>First difference: X<sub>t</sub> - X<sub>t-1</sub></b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.96, y = 0.50, xref = "paper", yref = "paper",
+      text = "<span style='color:#687589'>Both panels share the same innovations</span>",
+      showarrow = FALSE, xanchor = "right",
+      font = list(size = 11)
+    )
+  ),
+  sliders = list(
+    list(
+      active = which(arima_sample_sizes == arima_initial_n) - 1L,
+      steps = arima_size_steps,
+      currentvalue = list(prefix = "Sample size n = "),
+      x = 0.12, len = 0.77, y = 0.08, pad = list(t = 25)
+    )
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown", buttons = arima_model_buttons,
+      active = match(arima_initial_model, arima_models) - 1L,
+      showactive = TRUE,
+      x = 0.10, xanchor = "left", y = 1.05, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = arima_mode_buttons,
+      showactive = TRUE, active = 0,
+      x = 0.45, xanchor = "center", y = -0.18, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = list(list(
+        label = "Next realisation", method = "skip", args = list()
+      )),
+      showactive = FALSE, active = -1,
+      x = 0.85, xanchor = "center", y = -0.18, yanchor = "middle"
+    )
+  ),
+  autosize = TRUE, height = 800,
+  margin = list(l = 35, r = 35, t = 120, b = 130),
+  paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF"
+)
+
+p16 <- plotly::config(p16, responsive = TRUE, displaylogo = FALSE)
+p16$dependencies <- c(p16$dependencies, list(arima_dependency))
+
+### Interactivity ----
+
+p16 <- htmlwidgets::onRender(
+  p16,
+  "
+  function(el, x, data) {
+    var nMax = data.nMax;
+    var burn = data.burn;
+    var nPaths = data.nPaths;
+    var pathLength = nMax + burn;
+    var phiFixed = data.phi;
+    var thetaFixed = data.theta;
+    var model = data.initialModel;
+    var sampleSize = data.initialSize;
+    var highlight = 0;
+    var showAll = false;
+    var raw = null;
+    var cache = {};
+    var times = Array.from({length: nMax}, function(_, i) { return i + 1; });
+
+    function modelParameters(modelName) {
+      return {
+        phi: modelName === 'ARIMA(1,1,0)' || modelName === 'ARIMA(1,1,1)' ? phiFixed : 0,
+        theta: modelName === 'ARIMA(0,1,1)' || modelName === 'ARIMA(1,1,1)' ? thetaFixed : 0
+      };
+    }
+
+    function getPath(index) {
+      var key = model + ':' + index;
+      if (Object.prototype.hasOwnProperty.call(cache, key)) return cache[key];
+
+      var params = modelParameters(model);
+      var phi = params.phi;
+      var theta = params.theta;
+      var scale = Math.sqrt((1 + theta * theta + 2 * phi * theta) / (1 - phi * phi));
+      var start = index * pathLength;
+      var previousY = 0;
+      var previousZ = 0;
+      var stationary = new Array(nMax);
+      var integrated = new Array(nMax);
+      var accumulated = 0;
+
+      for (var t = 0; t < pathLength; t++) {
+        var z = raw[start + t];
+        var y = phi * previousY + z + theta * previousZ;
+        previousY = y;
+        previousZ = z;
+
+        if (t >= burn) {
+          var index = t - burn;
+          stationary[index] = y / scale;
+          accumulated += stationary[index];
+          integrated[index] = accumulated;
+        }
+      }
+
+      cache[key] = {level: integrated, differences: stationary};
+      return cache[key];
+    }
+
+    function stackLines(all, property) {
+      var xs = [];
+      var ys = [];
+      for (var j = 0; j < all.length; j++) {
+        if (j === highlight) continue;
+        var series = all[j][property];
+        for (var i = 0; i < sampleSize; i++) {
+          xs.push(i + 1);
+          ys.push(series[i]);
+        }
+        xs.push(null);
+        ys.push(null);
+      }
+      return {x: xs, y: ys};
+    }
+
+    function displayRange(all, property) {
+      var lo = 0;
+      var hi = 0;
+      for (var j = 0; j < all.length; j++) {
+        var values = all[j][property];
+        for (var i = 0; i < sampleSize; i++) {
+          if (values[i] < lo) lo = values[i];
+          if (values[i] > hi) hi = values[i];
+        }
+      }
+      var padding = Math.max(0.08 * (hi - lo), 0.25);
+      return [lo - padding, hi + padding];
+    }
+
+    function updatePlot() {
+      if (!raw) return;
+      var selected = getPath(highlight);
+      var all = showAll
+        ? Array.from({length: nPaths}, function(_, j) { return getPath(j); })
+        : [selected];
+      var levelBg = showAll ? stackLines(all, 'level') : {x: [], y: []};
+      var diffBg = showAll ? stackLines(all, 'differences') : {x: [], y: []};
+      var visibleTimes = times.slice(0, sampleSize);
+
+      Plotly.update(
+        el,
+        {
+          x: [levelBg.x, visibleTimes, diffBg.x, visibleTimes],
+          y: [levelBg.y, selected.level.slice(0, sampleSize),
+              diffBg.y, selected.differences.slice(0, sampleSize)]
+        },
+        {
+          'xaxis.range': [1, sampleSize],
+          'xaxis2.range': [1, sampleSize],
+          'yaxis.range': displayRange(all, 'level'),
+          'yaxis2.range': displayRange(all, 'differences')
+        },
+        [0, 1, 2, 3]
+      );
+    }
+
+    el.on('plotly_sliderchange', function(e) {
+      sampleSize = Number(e.step.label);
+      updatePlot();
+    });
+
+    el.on('plotly_buttonclicked', function(e) {
+      var label = String(e.button.label);
+      if (data.modelLabels.indexOf(label) >= 0) {
+        model = label;
+      } else if (label === 'One realisation') {
+        showAll = false;
+      } else if (label === 'All realisations') {
+        showAll = true;
+      } else if (label === 'Next realisation') {
+        highlight = (highlight + 1) % nPaths;
+      }
+      updatePlot();
+    });
+
+    if (!window.drpARIMADifferencing02Base) {
+      console.error('ARIMA explorer: simulation dependency was not loaded.');
+      return;
+    }
+
+    fetch(new URL('innovations.bin', window.drpARIMADifferencing02Base))
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.arrayBuffer();
+      })
+      .then(function(buffer) {
+        var expected = 4 * pathLength * nPaths;
+        if (buffer.byteLength !== expected) {
+          throw new Error('Unexpected binary size: ' + buffer.byteLength);
+        }
+        var view = new DataView(buffer);
+        raw = new Float32Array(expected / 4);
+        for (var i = 0; i < raw.length; i++) {
+          raw[i] = view.getFloat32(4 * i, true);
+        }
+        updatePlot();
+      })
+      .catch(function(error) {
+        console.error('ARIMA explorer: could not load innovations.bin', error);
+      });
+  }
+  ",
+  data = list(
+    nMax = arima_n,
+    burn = arima_burn,
+    nPaths = arima_paths,
+    phi = arima_phi,
+    theta = arima_theta,
+    modelLabels = arima_models,
+    initialModel = arima_initial_model,
+    initialSize = arima_initial_n
+  )
+)
+
+p16
+saveRDS(p16, "figures/02/arima-differencing.rds")
+
+## Forecasting inflation ----
+
+### Data and forecast origins ----
+
+# Uses the World Bank monthly CPI data prepared in ## Historical inflation.
+# If run separately, reconstruct the same year-on-year inflation series.
+if (!exists("inflation_data", inherits = TRUE)) {
+  forecast_file <- "data/macroeconomic/inflation-worldbank.xlsx"
+  stopifnot(file.exists(forecast_file))
+  
+  forecast_raw <- readxl::read_excel(forecast_file, sheet = "hcpi_m")
+  forecast_codes <- c("JPN", "GBR", "MEX", "TUR", "BRA")
+  forecast_names <- c("Japan", "United Kingdom", "Mexico", "Türkiye", "Brazil")
+  forecast_cols <- sort(grep("^[0-9]{6}$", names(forecast_raw), value = TRUE))
+  forecast_dates <- as.Date(paste0(
+    substr(forecast_cols, 1, 4), "-",
+    substr(forecast_cols, 5, 6), "-01"
+  ))
+  
+  forecast_rows <- match(forecast_codes, forecast_raw[["Country Code"]])
+  stopifnot(!anyNA(forecast_rows), length(forecast_cols) > 24L)
+  
+  inflation_data <- lapply(forecast_rows, function(i) {
+    cpi <- as.numeric(unlist(forecast_raw[i, forecast_cols], use.names = FALSE))
+    current <- cpi[13:length(cpi)]
+    previous <- cpi[1:(length(cpi) - 12L)]
+    rate <- 100 * (current / previous - 1)
+    valid <- is.finite(rate) & is.finite(current) &
+      is.finite(previous) & current > 0 & previous > 0
+    
+    data.frame(
+      date = as.character(forecast_dates[13:length(forecast_dates)][valid]),
+      inflation = round(rate[valid], 5)
+    )
+  })
+  names(inflation_data) <- forecast_names
+}
+
+inflation_fc_countries <- c(
+  "Japan", "United Kingdom", "Mexico", "Türkiye", "Brazil"
+)
+inflation_fc_models <- c(
+  "Persistence", "AR(1)", "ARMA(1,1)", "ARIMA(1,1,1)"
+)
+# Country-specific first observations chosen for the forecasting exercise.
+# These mark the beginning of the eligible history shown and modelled;
+# the FIRST FORECAST comes after 48 observations, not on these dates.
+inflation_fc_starts <- as.Date(c(
+  "1985-08-01", # Japan
+  "1984-04-01", # United Kingdom
+  "2002-01-01", # Mexico
+  "2004-01-01", # Türkiye
+  "1998-01-01"  # Brazil
+))
+names(inflation_fc_starts) <- inflation_fc_countries
+
+inflation_fc_horizon <- 12L
+inflation_fc_window <- 48L
+inflation_fc_estimation_modes <- c("Rolling (48 months)", "Expanding")
+
+stopifnot(all(inflation_fc_countries %in% names(inflation_data)))
+
+inflation_fc_raw <- lapply(inflation_fc_countries, function(country) {
+  z <- inflation_data[[country]]
+  stopifnot(all(c("date", "inflation") %in% names(z)))
+  dates <- as.Date(z$date)
+  values <- as.numeric(z$inflation)
+  valid <- !is.na(dates) & is.finite(values)
+  z <- data.frame(date = dates[valid], value = values[valid])
+  z <- z[order(z$date), ]
+  stopifnot(nrow(z) > 0L, !anyDuplicated(z$date))
+  
+  first <- inflation_fc_starts[[country]]
+  if (!first %in% z$date) {
+    stop("Inflation forecasting: ", country, " has no observation at ",
+         as.character(first), ". Check historical data coverage.")
+  }
+  z <- z[z$date >= first, , drop = FALSE]
+  rownames(z) <- NULL
+  z
+})
+names(inflation_fc_raw) <- inflation_fc_countries
+
+inflation_fc_last_dates <- as.Date(vapply(
+  inflation_fc_raw,
+  function(z) as.character(tail(z$date, 1L)),
+  character(1)
+))
+names(inflation_fc_last_dates) <- inflation_fc_countries
+
+# The overall calendar allows a compact rectangular binary forecast array;
+# individual country sliders will expose only their own eligible origins.
+inflation_fc_months <- seq(
+  min(inflation_fc_starts), max(inflation_fc_last_dates), by = "month"
+)
+
+# Missing calendar months are NA; do not fit across gaps.
+inflation_fc_series <- lapply(inflation_fc_raw, function(z) {
+  values <- rep(NA_real_, length(inflation_fc_months))
+  indices <- match(z$date, inflation_fc_months)
+  stopifnot(!anyNA(indices))
+  values[indices] <- z$value
+  values
+})
+names(inflation_fc_series) <- inflation_fc_countries
+
+# First eligible origin follows 48 monthly observations. At each origin,
+# rolling uses the latest 48 months and expanding uses all observations since
+# the country's designated start. Both require twelve later observations.
+inflation_fc_country_origins <- lapply(inflation_fc_countries, function(country) {
+  first_index <- match(inflation_fc_starts[[country]], inflation_fc_months)
+  last_index <- match(inflation_fc_last_dates[[country]], inflation_fc_months)
+  first_origin_index <- first_index + inflation_fc_window - 1L
+  last_origin_index <- last_index - inflation_fc_horizon
+  
+  if (first_origin_index > last_origin_index) {
+    stop("Inflation forecasting: insufficient history for ", country)
+  }
+  inflation_fc_months[seq.int(first_origin_index, last_origin_index)]
+})
+names(inflation_fc_country_origins) <- inflation_fc_countries
+
+inflation_fc_origin_dates <- sort(unique(do.call(c, inflation_fc_country_origins)))
+inflation_fc_origin_labels <- format(inflation_fc_origin_dates, "%Y-%m")
+inflation_fc_origin_indices <- match(
+  inflation_fc_origin_dates, inflation_fc_months
+)
+inflation_fc_country_origin_labels <- lapply(
+  inflation_fc_country_origins, format, format = "%Y-%m"
+)
+
+# Print each country's actual origin range for a quick source-data check.
+inflation_fc_coverage <- data.frame(
+  Country = inflation_fc_countries,
+  FirstObservation = as.character(inflation_fc_starts),
+  FirstOrigin = vapply(inflation_fc_country_origin_labels, `[`, "", 1L),
+  LastOrigin = vapply(inflation_fc_country_origin_labels, function(x) tail(x, 1L), ""),
+  LastObservation = as.character(inflation_fc_last_dates),
+  row.names = NULL
+)
+print(inflation_fc_coverage, row.names = FALSE)
+
+inflation_fc_initial_country <- "United Kingdom"
+inflation_fc_initial_model <- "ARMA(1,1)"
+inflation_fc_initial_estimation <- "Rolling (48 months)"
+inflation_fc_initial_origin <- if (
+  "2019-12" %in% inflation_fc_country_origin_labels[[inflation_fc_initial_country]]
+) "2019-12" else {
+  candidates <- inflation_fc_country_origin_labels[[inflation_fc_initial_country]]
+  candidates[max(1L, floor(length(candidates) / 2L))]
+}
+
+inflation_fc_country0 <- match(
+  inflation_fc_initial_country, inflation_fc_countries
+)
+inflation_fc_model0 <- match(inflation_fc_initial_model, inflation_fc_models)
+inflation_fc_estimation0 <- match(
+  inflation_fc_initial_estimation, inflation_fc_estimation_modes
+)
+inflation_fc_origin0 <- match(
+  inflation_fc_initial_origin, inflation_fc_origin_labels
+)
+
+### Rolling- and expanding-window forecasts ----
+
+# Persistence forecasts are constant at the last observation.
+# Their 95% bands are *empirical Gaussian reference bands*, based on
+# historical h-month changes. They are not fitted ARIMA intervals.
+inflation_fc_persistence <- function(y, horizon) {
+  point <- rep(tail(y, 1L), horizon)
+  spread <- vapply(seq_len(horizon), function(h) {
+    delta <- y[(h + 1L):length(y)] - y[1:(length(y) - h)]
+    stats::sd(delta)
+  }, numeric(1))
+  
+  cbind(
+    mean = point,
+    lower = point - stats::qnorm(0.975) * spread,
+    upper = point + stats::qnorm(0.975) * spread
+  )
+}
+
+# Keep failed fits as missing forecasts; do not replace an unsuccessful
+# ARMA/ARIMA estimate with another model and call it the same thing.
+inflation_fc_arima <- function(y, order, horizon) {
+  attempts <- c("CSS-ML", "ML", "CSS")
+  
+  for (method in attempts) {
+    fit <- tryCatch(
+      suppressWarnings(stats::arima(
+        y,
+        order = order,
+        include.mean = (order[2] == 0L),
+        method = method,
+        transform.pars = TRUE,
+        optim.control = list(maxit = 200)
+      )),
+      error = function(e) NULL
+    )
+    
+    if (is.null(fit)) next
+    if (!is.null(fit$code) && fit$code != 0L) next
+    
+    prediction <- tryCatch(
+      suppressWarnings(stats::predict(fit, n.ahead = horizon)),
+      error = function(e) NULL
+    )
+    if (is.null(prediction)) next
+    
+    point <- as.numeric(prediction$pred)
+    se <- as.numeric(prediction$se)
+    if (
+      length(point) != horizon || length(se) != horizon ||
+      !all(is.finite(point)) || !all(is.finite(se)) ||
+      any(se < 0)
+    ) next
+    
+    return(cbind(
+      mean = point,
+      lower = point - stats::qnorm(0.975) * se,
+      upper = point + stats::qnorm(0.975) * se
+    ))
+  }
+  
+  matrix(NA_real_, nrow = horizon, ncol = 3L)
+}
+
+# Dimensions: horizon x {mean,lower,upper} x origin x model x country
+#             x estimation method. Methods are stored in the last dimension
+# to retain the original rolling-window binary order within each block.
+# Country-ineligible origins remain NA.
+inflation_fc_dims <- c(
+  inflation_fc_horizon,
+  3L,
+  length(inflation_fc_origin_indices),
+  length(inflation_fc_models),
+  length(inflation_fc_countries),
+  length(inflation_fc_estimation_modes)
+)
+
+inflation_fc_start_indices <- match(
+  as.Date(inflation_fc_starts[inflation_fc_countries]), inflation_fc_months
+)
+stopifnot(!anyNA(inflation_fc_start_indices))
+
+# Cache both estimation methods together. If the previous rolling-only
+# cache matches its *original* signature, carry its forecasts forward and
+# calculate only the expanding forecasts. This avoids unnecessary refits.
+inflation_fc_cache_dir <- "data/cache"
+dir.create(inflation_fc_cache_dir, recursive = TRUE, showWarnings = FALSE)
+inflation_fc_cache_file <- file.path(
+  inflation_fc_cache_dir, "session02-inflation-forecast-windows.rds"
+)
+inflation_fc_old_cache_file <- file.path(
+  inflation_fc_cache_dir, "session02-inflation-forecasts.rds"
+)
+
+inflation_fc_signature <- list(
+  version = "figure17-rolling-expanding-48-v3",
+  starts = inflation_fc_starts,
+  window = inflation_fc_window,
+  country_origins = inflation_fc_country_origin_labels,
+  dates = as.character(inflation_fc_months),
+  series = inflation_fc_series,
+  models = inflation_fc_models,
+  origins = inflation_fc_origin_indices,
+  horizon = inflation_fc_horizon,
+  estimation = inflation_fc_estimation_modes
+)
+
+inflation_fc_cached <- if (file.exists(inflation_fc_cache_file)) {
+  tryCatch(readRDS(inflation_fc_cache_file), error = function(e) NULL)
+} else {
+  NULL
+}
+
+if (
+  !is.null(inflation_fc_cached) &&
+  identical(inflation_fc_cached$signature, inflation_fc_signature) &&
+  identical(dim(inflation_fc_cached$forecast), inflation_fc_dims)
+) {
+  inflation_fc_predictions <- inflation_fc_cached$forecast
+  message("Inflation forecasts: using rolling/expanding cache.")
+} else {
+  inflation_fc_predictions <- array(NA_real_, dim = inflation_fc_dims)
+  inflation_fc_reused_rolling <- FALSE
+  
+  # Optional migration from Figure 17 v2 (48-month rolling-only).
+  # Only reuse forecasts when *all* underlying data and settings match.
+  if (file.exists(inflation_fc_old_cache_file)) {
+    inflation_fc_old <- tryCatch(
+      readRDS(inflation_fc_old_cache_file), error = function(e) NULL
+    )
+    inflation_fc_old_signature <- inflation_fc_signature[
+      names(inflation_fc_signature) != "estimation"
+    ]
+    inflation_fc_old_signature$version <- "figure17-country-start-rolling48-v2"
+    if (
+      !is.null(inflation_fc_old) &&
+      identical(inflation_fc_old$signature, inflation_fc_old_signature) &&
+      identical(dim(inflation_fc_old$forecast), inflation_fc_dims[1:5])
+    ) {
+      inflation_fc_predictions[, , , , , 1L] <- inflation_fc_old$forecast
+      inflation_fc_reused_rolling <- TRUE
+      message("Inflation forecasts: reused previous rolling estimates.")
+    }
+    rm(inflation_fc_old)
+  }
+  
+  for (e in seq_along(inflation_fc_estimation_modes)) {
+    if (e == 1L && inflation_fc_reused_rolling) next
+    
+    for (i in seq_along(inflation_fc_countries)) {
+      values <- inflation_fc_series[[i]]
+      country <- inflation_fc_countries[i]
+      message("Inflation forecasts: fitting ", country, " — ",
+              inflation_fc_estimation_modes[e], "...")
+      eligible <- inflation_fc_country_origin_labels[[country]]
+      
+      for (o in seq_along(inflation_fc_origin_indices)) {
+        if (!inflation_fc_origin_labels[o] %in% eligible) next
+        
+        last <- inflation_fc_origin_indices[o]
+        first <- if (e == 1L) {
+          last - inflation_fc_window + 1L
+        } else {
+          inflation_fc_start_indices[i]
+        }
+        y <- values[first:last]
+        if (length(y) < inflation_fc_window || any(!is.finite(y))) next
+        
+        # Both 6- and 12-month targets must have an observed outcome.
+        future_idx <- last + seq_len(inflation_fc_horizon)
+        if (any(!is.finite(values[future_idx]))) next
+        
+        inflation_fc_predictions[, , o, 1L, i, e] <-
+          inflation_fc_persistence(y, inflation_fc_horizon)
+        
+        inflation_fc_predictions[, , o, 2L, i, e] <-
+          inflation_fc_arima(y, c(1L, 0L, 0L), inflation_fc_horizon)
+        
+        inflation_fc_predictions[, , o, 3L, i, e] <-
+          inflation_fc_arima(y, c(1L, 0L, 1L), inflation_fc_horizon)
+        
+        inflation_fc_predictions[, , o, 4L, i, e] <-
+          inflation_fc_arima(y, c(1L, 1L, 1L), inflation_fc_horizon)
+      }
+    }
+  }
+  
+  saveRDS(
+    list(signature = inflation_fc_signature, forecast = inflation_fc_predictions),
+    inflation_fc_cache_file
+  )
+}
+
+inflation_fc_missing <- apply(
+  !is.finite(inflation_fc_predictions[1L, 1L, , , , , drop = FALSE]),
+  c(4, 5, 6), sum
+)
+dimnames(inflation_fc_missing) <- list(
+  Model = inflation_fc_models,
+  Country = inflation_fc_countries,
+  Estimation = inflation_fc_estimation_modes
+)
+cat("\nForecast origins with unavailable predictions (including ineligible dates):\n")
+print(inflation_fc_missing)
+
+### Binary forecast asset ----
+
+inflation_fc_asset_dir <- "figures/02/inflation-forecast-windows-assets"
+dir.create(inflation_fc_asset_dir, recursive = TRUE, showWarnings = FALSE)
+
+inflation_fc_con <- file(
+  file.path(inflation_fc_asset_dir, "predictions.bin"), "wb"
+)
+writeBin(
+  as.numeric(inflation_fc_predictions),
+  inflation_fc_con,
+  size = 4L,
+  endian = "little"
+)
+close(inflation_fc_con)
+
+writeLines(
+  'window.drpInflationForecast03Base = new URL(".", document.currentScript.src).href;',
+  file.path(inflation_fc_asset_dir, "loader.js"),
+  useBytes = TRUE
+)
+
+inflation_fc_dependency <- htmltools::htmlDependency(
+  name = "drp-inflation-forecast-03",
+  version = "1.0.0",
+  src = c(file = normalizePath(inflation_fc_asset_dir, winslash = "/")),
+  script = "loader.js",
+  all_files = TRUE
+)
+
+### Figure ----
+
+inflation_fc_date_strings <- as.character(inflation_fc_months)
+inflation_fc_initial_idx <- inflation_fc_origin_indices[inflation_fc_origin0]
+inflation_fc_initial_training_start <- inflation_fc_initial_idx -
+  inflation_fc_window + 1L
+inflation_fc_initial_values <- inflation_fc_series[[inflation_fc_country0]]
+inflation_fc_initial_fc <- inflation_fc_predictions[
+  , , inflation_fc_origin0, inflation_fc_model0, inflation_fc_country0,
+  inflation_fc_estimation0
+]
+
+inflation_fc_future_idx <- inflation_fc_initial_idx + seq_len(12L)
+inflation_fc_training_idx <- seq.int(
+  max(1L, inflation_fc_initial_idx - 23L),
+  inflation_fc_initial_idx
+)
+
+inflation_fc_plot_range <- function(x, min_padding = 0.5) {
+  x <- x[is.finite(x)]
+  if (!length(x)) return(c(-1, 1))
+  limits <- range(x)
+  pad <- max(min_padding, 0.08 * diff(limits))
+  limits + c(-pad, pad)
+}
+
+inflation_fc_top_range <- inflation_fc_plot_range(inflation_fc_initial_values)
+inflation_fc_bottom_range <- inflation_fc_plot_range(c(
+  inflation_fc_initial_values[c(
+    inflation_fc_training_idx,
+    inflation_fc_future_idx
+  )],
+  inflation_fc_initial_fc
+))
+
+inflation_fc_band_x <- c(
+  inflation_fc_date_strings[inflation_fc_future_idx],
+  rev(inflation_fc_date_strings[inflation_fc_future_idx])
+)
+inflation_fc_band_y <- c(
+  inflation_fc_initial_fc[, 2L],
+  rev(inflation_fc_initial_fc[, 3L])
+)
+
+inflation_fc_forecast_x <- inflation_fc_date_strings[c(
+  inflation_fc_initial_idx, inflation_fc_future_idx
+)]
+inflation_fc_forecast_y <- c(
+  inflation_fc_initial_values[inflation_fc_initial_idx],
+  inflation_fc_initial_fc[, 1L]
+)
+inflation_fc_actual_y <- inflation_fc_initial_values[c(
+  inflation_fc_initial_idx, inflation_fc_future_idx
+)]
+
+inflation_fc_target_indices <- c(6L, 12L)
+inflation_fc_target_x <- inflation_fc_date_strings[
+  inflation_fc_initial_idx + inflation_fc_target_indices
+]
+inflation_fc_target_labels <- c("6 months ahead", "12 months ahead")
+
+p17 <- plotly::plot_ly()
+
+# Top: the complete observed record is grey; the information available
+# by the selected origin is overlaid in Imperial blue. The estimation period
+# and forecast period are shaded in purple and teal respectively.
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_date_strings,
+  y = inflation_fc_initial_values,
+  type = "scatter", mode = "lines", xaxis = "x", yaxis = "y",
+  line = list(color = "#9AA5B6", width = 1.6),
+  hovertemplate = "Month: %{x|%b %Y}<br>Observed inflation: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_date_strings[seq_len(inflation_fc_initial_idx)],
+  y = inflation_fc_initial_values[seq_len(inflation_fc_initial_idx)],
+  type = "scatter", mode = "lines", xaxis = "x", yaxis = "y",
+  line = list(color = "#0100CA", width = 2.1),
+  hovertemplate = "Month: %{x|%b %Y}<br>Available inflation: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+# Bottom: a forecast interval, recent history, subsequent observations,
+# and the 12-step forecast (highlighted at both 6 and 12 months ahead).
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_band_x, y = inflation_fc_band_y,
+  type = "scatter", mode = "lines", xaxis = "x2", yaxis = "y2",
+  line = list(color = "rgba(0,140,149,0)", width = 0),
+  fill = "toself", fillcolor = "rgba(0,140,149,0.15)",
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_date_strings[inflation_fc_training_idx],
+  y = inflation_fc_initial_values[inflation_fc_training_idx],
+  type = "scatter", mode = "lines", xaxis = "x2", yaxis = "y2",
+  line = list(color = "#687589", width = 2.0),
+  hovertemplate = "Month: %{x|%b %Y}<br>Recent inflation: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_forecast_x, y = inflation_fc_actual_y,
+  type = "scatter", mode = "lines", xaxis = "x2", yaxis = "y2",
+  line = list(color = "#0100CA", width = 2.4),
+  hovertemplate = "Month: %{x|%b %Y}<br>Observed inflation: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_forecast_x, y = inflation_fc_forecast_y,
+  type = "scatter", mode = "lines", xaxis = "x2", yaxis = "y2",
+  line = list(color = "#008C95", width = 2.5, dash = "dash"),
+  hovertemplate = "Month: %{x|%b %Y}<br>Forecast: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_target_x,
+  y = inflation_fc_initial_fc[inflation_fc_target_indices, 1L],
+  text = inflation_fc_target_labels,
+  type = "scatter", mode = "markers", xaxis = "x2", yaxis = "y2",
+  marker = list(
+    color = "#008C95", size = 10,
+    line = list(color = "#FFFFFF", width = 1.5)
+  ),
+  hovertemplate = "%{text}<br>Forecast: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+p17 <- plotly::add_trace(
+  p17,
+  x = inflation_fc_target_x,
+  y = inflation_fc_initial_values[
+    inflation_fc_initial_idx + inflation_fc_target_indices
+  ],
+  text = inflation_fc_target_labels,
+  type = "scatter", mode = "markers", xaxis = "x2", yaxis = "y2",
+  marker = list(
+    color = "#C45B40", size = 9,
+    line = list(color = "#FFFFFF", width = 1.5)
+  ),
+  hovertemplate = "%{text}<br>Observed: %{y:.2f}%<extra></extra>",
+  showlegend = FALSE, inherit = FALSE
+)
+
+inflation_fc_country_buttons <- lapply(inflation_fc_countries, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+inflation_fc_model_buttons <- lapply(inflation_fc_models, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+inflation_fc_estimation_buttons <- lapply(inflation_fc_estimation_modes, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+inflation_fc_initial_country_labels <-
+  inflation_fc_country_origin_labels[[inflation_fc_initial_country]]
+inflation_fc_origin_steps <- lapply(inflation_fc_initial_country_labels, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+p17 <- plotly::layout(
+  p17,
+  title = list(
+    text = "Forecasting inflation: what did the model know?",
+    x = 0.5, font = list(size = 21, color = "#000000")
+  ),
+  xaxis = list(
+    domain = c(0.07, 0.96), anchor = "y", type = "date",
+    range = c(
+      as.character(inflation_fc_starts[[inflation_fc_initial_country]]),
+      as.character(inflation_fc_last_dates[[inflation_fc_initial_country]])
+    ),
+    tickformat = "%Y", nticks = 10,
+    title = "Calendar year", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis = list(
+    domain = c(0.59, 0.89), anchor = "x",
+    range = inflation_fc_top_range, title = "YoY inflation (%)",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  xaxis2 = list(
+    domain = c(0.07, 0.96), anchor = "y2", type = "date",
+    range = c(
+      inflation_fc_date_strings[inflation_fc_training_idx[1L]],
+      tail(inflation_fc_forecast_x, 1L)
+    ),
+    tickformat = "%b %Y", nticks = 9,
+    title = "Month", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis2 = list(
+    domain = c(0.14, 0.43), anchor = "x2",
+    range = inflation_fc_bottom_range,
+    title = "YoY inflation (%)",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  shapes = list(
+    # Only the TOP plot shades the estimation history.
+    list(
+      type = "rect", xref = "x", yref = "paper",
+      x0 = inflation_fc_date_strings[inflation_fc_initial_training_start],
+      x1 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      y0 = 0.59, y1 = 0.89,
+      line = list(width = 0),
+      fillcolor = "rgba(135,117,174,0.13)", layer = "below"
+    ),
+    # Existing 12-month forecast-window shading, also TOP plot only.
+    list(
+      type = "rect", xref = "x", yref = "paper",
+      x0 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      x1 = tail(inflation_fc_forecast_x, 1L),
+      y0 = 0.59, y1 = 0.89,
+      line = list(width = 0),
+      fillcolor = "rgba(0,140,149,0.09)", layer = "below"
+    ),
+    list(
+      type = "line", xref = "x", yref = "paper",
+      x0 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      x1 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      y0 = 0.59, y1 = 0.89,
+      line = list(color = "#C45B40", width = 1.4, dash = "dot")
+    ),
+    list(
+      type = "line", xref = "x2", yref = "paper",
+      x0 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      x1 = inflation_fc_date_strings[inflation_fc_initial_idx],
+      y0 = 0.14, y1 = 0.43,
+      line = list(color = "#C45B40", width = 1.4, dash = "dot")
+    )
+  ),
+  annotations = list(
+    list(
+      x = 0.07, y = 0.95, xref = "paper", yref = "paper",
+      text = "<b>Historical inflation</b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 12, color = "#000000")
+    ),
+    list(
+      x = 0.07, y = 0.47, xref = "paper", yref = "paper",
+      text = "<b>12-month forecast</b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 12, color = "#000000")
+    ),
+    list(
+      x = 0.95, y = 0.46, xref = "paper", yref = "paper",
+      text = "", showarrow = FALSE, xanchor = "right",
+      font = list(size = 11, color = "#C45B40")
+    ),
+    list(
+      x = 0.96, y = 0.95, xref = "paper", yref = "paper",
+      text = "<b>Rolling: 48 months</b>",
+      showarrow = FALSE, xanchor = "right",
+      font = list(size = 11, color = "#8775AE")
+    )
+  ),
+  sliders = list(
+    list(
+      active = match(inflation_fc_initial_origin, inflation_fc_initial_country_labels) - 1L,
+      steps = inflation_fc_origin_steps,
+      currentvalue = list(
+        prefix = "Forecast origin: ",
+        font = list(color = "#000000", size = 13)
+      ),
+      ticklen = 0, minorticklen = 0,
+      font = list(color = "rgba(0,0,0,0)", size = 1),
+      x = 0.12, len = 0.77, y = 0.05, pad = list(t = 24)
+    )
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown", buttons = inflation_fc_country_buttons,
+      active = inflation_fc_country0 - 1L, showactive = TRUE,
+      x = 0.08, xanchor = "left", y = 1.04, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = inflation_fc_model_buttons,
+      active = inflation_fc_model0 - 1L, showactive = TRUE,
+      x = 0.39, xanchor = "left", y = 1.04, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = inflation_fc_estimation_buttons,
+      active = inflation_fc_estimation0 - 1L, showactive = TRUE,
+      x = 0.68, xanchor = "left", y = 1.04, yanchor = "middle"
+    )
+  ),
+  autosize = TRUE, height = 850,
+  margin = list(l = 30, r = 35, t = 120, b = 105),
+  paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF"
+)
+
+p17 <- plotly::config(p17, responsive = TRUE, displaylogo = FALSE)
+p17$dependencies <- c(p17$dependencies, list(inflation_fc_dependency))
+
+### Interactivity ----
+
+p17 <- htmlwidgets::onRender(
+  p17,
+  "
+  function(el, x, data) {
+    var countries = data.countries;
+    var models = data.models;
+    var estimationModes = data.estimationModes;
+    var originLabels = data.originLabels;
+    var countryOrigins = data.countryOrigins;
+    var originMonthIndices = data.originMonthIndices;
+    var countryStarts = data.countryStarts;
+    var countryStartIndices = data.countryStartIndices;
+    var rollingWindow = data.rollingWindow;
+    var countryEnds = data.countryEnds;
+    var dates = data.months;
+    var values = data.series;
+    var nOrigins = originLabels.length;
+    var horizon = data.horizon;
+    var country = data.initialCountry;
+    var model = data.initialModel;
+    var estimation = data.initialEstimation;
+    var origin = data.initialOrigin;
+    var raw = null;
+
+    function interval(countryIndex, modelIndex, originIndex, estimationIndex, field) {
+      var offset = (
+        (((estimationIndex * countries.length + countryIndex) * models.length
+          + modelIndex) * nOrigins + originIndex) * 3 + field
+      ) * horizon;
+      var result = new Array(horizon);
+      for (var h = 0; h < horizon; h++) {
+        var v = raw[offset + h];
+        result[h] = Number.isFinite(v) ? v : null;
+      }
+      return result;
+    }
+
+    function finiteRange(arr, minPad) {
+      var lo = Infinity;
+      var hi = -Infinity;
+      for (var i = 0; i < arr.length; i++) {
+        var v = arr[i];
+        if (v !== null && Number.isFinite(v)) {
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+      }
+      if (!Number.isFinite(lo)) return [-1, 1];
+      var pad = Math.max(minPad, 0.08 * (hi - lo));
+      return [lo - pad, hi + pad];
+    }
+
+    function updatePlot() {
+      if (!raw) return;
+      var ci = countries.indexOf(country);
+      var mi = models.indexOf(model);
+      var ei = estimationModes.indexOf(estimation);
+      var oi = originLabels.indexOf(origin);
+      if (ci < 0 || mi < 0 || ei < 0 || oi < 0) return;
+
+      var monthly = values[ci];
+      var originIndex = originMonthIndices[oi] - 1;
+      // The training shade changes, not the bottom-panel 24-month context.
+      var estimationStart = ei === 0 ? originIndex - rollingWindow + 1
+        : countryStartIndices[ci] - 1;
+      var nTraining = originIndex - estimationStart + 1;
+      var first = Math.max(0, originIndex - 23);
+      var futureDates = dates.slice(originIndex + 1, originIndex + 13);
+      var recentDates = dates.slice(first, originIndex + 1);
+      var recentValues = monthly.slice(first, originIndex + 1);
+      var futureActual = monthly.slice(originIndex + 1, originIndex + 13);
+      var originDate = dates[originIndex];
+      var lastDate = dates[originIndex + 12];
+
+      var point = interval(ci, mi, oi, ei, 0);
+      var lower = interval(ci, mi, oi, ei, 1);
+      var upper = interval(ci, mi, oi, ei, 2);
+      var available = point.every(Number.isFinite) &&
+        lower.every(Number.isFinite) && upper.every(Number.isFinite);
+
+      var bandDates = futureDates.concat(futureDates.slice().reverse());
+      var bandValues = lower.concat(upper.slice().reverse());
+      var forecastDates = [originDate].concat(futureDates);
+      var forecastValues = [monthly[originIndex]].concat(point);
+      var actualValues = [monthly[originIndex]].concat(futureActual);
+      var targetDates = [futureDates[5], futureDates[11]];
+      var targetForecast = [point[5], point[11]];
+      var targetActual = [futureActual[5], futureActual[11]];
+
+      var topRange = finiteRange(monthly, 0.5);
+      var bottomRange = finiteRange(
+        recentValues.concat(futureActual, point, lower, upper), 0.5
+      );
+
+      Plotly.update(
+        el,
+        {
+          x: [
+            dates,
+            dates.slice(0, originIndex + 1),
+            bandDates,
+            recentDates,
+            forecastDates,
+            forecastDates,
+            targetDates,
+            targetDates
+          ],
+          y: [
+            monthly,
+            monthly.slice(0, originIndex + 1),
+            bandValues,
+            recentValues,
+            actualValues,
+            forecastValues,
+            targetForecast,
+            targetActual
+          ]
+        },
+        {
+          'yaxis.range': topRange,
+          'xaxis.range': [countryStarts[ci], countryEnds[ci]],
+          'xaxis2.range': [recentDates[0], lastDate],
+          'yaxis2.range': bottomRange,
+          'shapes[0].x0': dates[estimationStart],
+          'shapes[0].x1': originDate,
+          'shapes[1].x0': originDate,
+          'shapes[1].x1': lastDate,
+          'shapes[2].x0': originDate,
+          'shapes[2].x1': originDate,
+          'shapes[3].x0': originDate,
+          'shapes[3].x1': originDate,
+          'annotations[2].text': available ? '' :
+            '<b>Forecast unavailable for this model and origin</b>',
+          'annotations[3].text': '<b>' + (ei === 0 ? 'Rolling' : 'Expanding') +
+            ': ' + nTraining + ' months</b>'
+        },
+        [0, 1, 2, 3, 4, 5, 6, 7]
+      );
+    }
+
+    el.on('plotly_sliderchange', function(e) {
+      origin = String(e.step.label);
+      updatePlot();
+    });
+
+    function selectCountry(nextCountry) {
+      country = nextCountry;
+      var ci = countries.indexOf(country);
+      var allowed = countryOrigins[ci];
+
+      // Preserve the currently selected origin whenever it exists for
+      // the newly selected country; otherwise clamp to its date range.
+      if (allowed.indexOf(origin) < 0) {
+        if (origin < allowed[0]) origin = allowed[0];
+        else if (origin > allowed[allowed.length - 1]) {
+          origin = allowed[allowed.length - 1];
+        } else {
+          origin = allowed.find(function(z) { return z >= origin; });
+        }
+      }
+
+      // The slider itself changes country: no irrelevant months or
+      // unusable origins appear before the first 48-month window.
+      var steps = allowed.map(function(z) {
+        return {label: z, method: 'skip', args: []};
+      });
+      var active = allowed.indexOf(origin);
+      Plotly.relayout(el, {
+        'sliders[0].steps': steps,
+        'sliders[0].active': active
+      }).then(updatePlot);
+    }
+
+    el.on('plotly_buttonclicked', function(e) {
+      var label = String(e.button.label);
+      if (countries.indexOf(label) >= 0) selectCountry(label);
+      else if (models.indexOf(label) >= 0) {
+        model = label;
+        updatePlot();
+      } else if (estimationModes.indexOf(label) >= 0) {
+        estimation = label;
+        updatePlot();
+      }
+    });
+
+    if (!window.drpInflationForecast03Base) {
+      console.error('Inflation forecasting: asset loader not found.');
+      return;
+    }
+
+    fetch(new URL('predictions.bin', window.drpInflationForecast03Base))
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.arrayBuffer();
+      })
+      .then(function(buffer) {
+        var expected = 4 * horizon * 3 * nOrigins * models.length * countries.length * estimationModes.length;
+        if (buffer.byteLength !== expected) {
+          throw new Error('Unexpected binary size: ' + buffer.byteLength);
+        }
+        var view = new DataView(buffer);
+        raw = new Float32Array(buffer.byteLength / 4);
+        for (var i = 0; i < raw.length; i++) {
+          raw[i] = view.getFloat32(4 * i, true);
+        }
+        updatePlot();
+      })
+      .catch(function(error) {
+        console.error('Inflation forecasting: could not load predictions.', error);
+      });
+  }
+  ",
+  data = list(
+    countries = inflation_fc_countries,
+    models = inflation_fc_models,
+    estimationModes = inflation_fc_estimation_modes,
+    originLabels = inflation_fc_origin_labels,
+    countryOrigins = unname(inflation_fc_country_origin_labels),
+    originMonthIndices = inflation_fc_origin_indices,
+    countryStarts = as.character(inflation_fc_starts),
+    countryStartIndices = inflation_fc_start_indices,
+    rollingWindow = inflation_fc_window,
+    countryEnds = as.character(inflation_fc_last_dates),
+    months = inflation_fc_date_strings,
+    series = unname(inflation_fc_series),
+    horizon = inflation_fc_horizon,
+    initialCountry = inflation_fc_initial_country,
+    initialModel = inflation_fc_initial_model,
+    initialEstimation = inflation_fc_initial_estimation,
+    initialOrigin = inflation_fc_initial_origin
+  )
+)
+
+p17
+saveRDS(p17, "figures/02/inflation-forecasting.rds")
+
+## When trajectories mislead ----
+
+### Observed daily returns ----
+
+look_tickers <- c(
+  "S&P 500" = "SPY",
+  "Bitcoin" = "BTC-USD",
+  "NVIDIA" = "NVDA",
+  "CarGurus" = "CARG",
+  "Rigel Pharma" = "RIGL",
+  "Alibaba" = "BABA"
+)
+
+look_first_date <- as.Date("2018-01-02")
+look_lag_max <- 20L
+look_n_paths <- 100L
+look_burn <- 600L
+look_initial_order <- 4L
+look_initial_distribution <- "Fitted Student-t"
+look_distributions <- c("Gaussian", "Student-t (5)", "Student-t (10)", "Fitted Student-t")
+look_cache_dir <- "data/cache/return-lookalikes"
+look_refresh_returns <- FALSE
+look_refresh_fits <- FALSE
+
+dir.create(look_cache_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create("figures/02", recursive = TRUE, showWarnings = FALSE)
+
+# Reuse local returns on subsequent runs. Set look_refresh_returns = TRUE
+# to retrieve the latest prices, as in Session 1.
+look_returns <- lapply(seq_along(look_tickers), function(j) {
+  asset <- names(look_tickers)[j]
+  ticker <- unname(look_tickers[j])
+  cache_file <- file.path(look_cache_dir, paste0(ticker, ".rds"))
+  
+  if (!look_refresh_returns && file.exists(cache_file)) {
+    z <- readRDS(cache_file)
+  } else {
+    z <- tryCatch({
+      prices <- quantmod::getSymbols(
+        ticker,
+        src = "yahoo",
+        from = look_first_date,
+        to = Sys.Date(),
+        auto.assign = FALSE
+      )
+      returns <- na.omit(100 * diff(log(quantmod::Ad(prices))))
+      data.frame(
+        Date = as.Date(zoo::index(returns)),
+        Return = as.numeric(returns)
+      )
+    }, error = function(e) {
+      if (file.exists(cache_file)) {
+        warning("Using cached returns for ", asset, ": ", conditionMessage(e))
+        readRDS(cache_file)
+      } else {
+        warning("Skipping ", asset, ": ", conditionMessage(e))
+        NULL
+      }
+    })
+    
+    if (!is.null(z)) saveRDS(z, cache_file)
+  }
+  
+  if (is.null(z)) return(NULL)
+  
+  z <- z[is.finite(z$Return) & !is.na(z$Date), , drop = FALSE]
+  z <- z[order(z$Date), , drop = FALSE]
+  z <- z[!duplicated(z$Date), , drop = FALSE]
+  
+  if (nrow(z) < max(100L, 3L * look_lag_max) ||
+      !is.finite(stats::sd(z$Return)) || stats::sd(z$Return) <= 0) {
+    warning("Skipping ", asset, ": insufficient usable return observations")
+    return(NULL)
+  }
+  
+  z
+})
+
+names(look_returns) <- names(look_tickers)
+look_returns <- Filter(Negate(is.null), look_returns)
+stopifnot(length(look_returns) >= 1L)
+
+look_asset_names <- names(look_returns)
+look_n_max <- max(vapply(look_returns, nrow, integer(1)))
+look_lags <- seq_len(look_lag_max)
+
+### Student-t fits ----
+
+# Re-estimate the same unconditional Student-t family as in Session 1.
+# Its "shape" parameter is nu (degrees of freedom); these are NOT
+# fitted AR innovation distributions.
+if (!requireNamespace("tsdistributions", quietly = TRUE) ||
+    !requireNamespace("tsmethods", quietly = TRUE)) {
+  stop("Figure 18 requires the tsdistributions and tsmethods packages.")
+}
+
+look_fitted_nu <- vapply(look_asset_names, function(asset) {
+  ticker <- unname(look_tickers[asset])
+  returns_file <- file.path(look_cache_dir, paste0(ticker, ".rds"))
+  fit_file <- file.path(look_cache_dir, paste0(ticker, "-student-t-fit.rds"))
+  signature <- unname(tools::md5sum(returns_file))
+  
+  if (!look_refresh_fits && file.exists(fit_file)) {
+    cached <- readRDS(fit_file)
+    if (identical(cached$signature, signature) &&
+        is.finite(cached$nu) && cached$nu > 2) {
+      return(as.numeric(cached$nu))
+    }
+  }
+  
+  fit <- tryCatch(
+    tsmethods::estimate(
+      tsdistributions::distribution_modelspec(
+        look_returns[[asset]]$Return, distribution = "std"
+      ),
+      use_hessian = FALSE
+    ),
+    error = function(e) stop("Student-t fit failed for ", asset, ": ", conditionMessage(e))
+  )
+  
+  nu <- as.numeric(stats::coef(fit)["shape"])
+  if (length(nu) != 1L || !is.finite(nu) || nu <= 2) {
+    stop("Invalid fitted Student-t degrees of freedom for ", asset)
+  }
+  
+  saveRDS(list(signature = signature, nu = nu), fit_file)
+  nu
+}, numeric(1))
+
+print(data.frame(Asset = look_asset_names, Fitted_df = round(look_fitted_nu, 3)))
+
+# Monotone quantile maps allow all four innovation choices to share the
+# same underlying Gaussian draws, without storing nine huge simulations.
+# z -> standardised Student-t quantile at probability Phi(z).
+look_grid_min <- -7.5
+look_grid_step <- 0.0025
+look_grid_z <- seq(look_grid_min, 7.5, by = look_grid_step)
+look_df_grid <- c(5, 10, unname(look_fitted_nu))
+look_quantile_map <- vapply(look_df_grid, function(nu) {
+  stats::qt(stats::pnorm(look_grid_z), df = nu) * sqrt((nu - 2) / nu)
+}, numeric(length(look_grid_z)))
+stopifnot(all(is.finite(look_quantile_map)))
+
+look_t_innovations <- function(z, nu) {
+  stats::qt(stats::pnorm(z), df = nu) * sqrt((nu - 2) / nu)
+}
+
+# Intentionally illustrative, rather than fitted, negative-ACF models.
+# Sum of absolute AR coefficients is below one for every order,
+# providing a simple sufficient condition for stationarity.
+look_ar_coefficients <- list(
+  c(-0.94),
+  c(-0.72, 0.21),
+  c(-0.60, 0.24, -0.10),
+  c(-0.50, 0.25, -0.13, 0.07)
+)
+stopifnot(all(vapply(look_ar_coefficients, function(phi) sum(abs(phi)) < 1, logical(1))))
+
+# Innovation standard deviation one: theoretical standard deviation of X_t.
+look_coefficients_js <- lapply(look_ar_coefficients, function(phi) {
+  c(phi, rep(0, 4L - length(phi)))
+})
+
+look_ar_sd <- vapply(look_ar_coefficients, function(phi) {
+  rho <- as.numeric(stats::ARMAacf(ar = phi, lag.max = length(phi)))[-1]
+  sqrt(1 / (1 - sum(phi * rho)))
+}, numeric(1))
+
+look_acf <- function(x) {
+  as.numeric(stats::acf(x, lag.max = look_lag_max, plot = FALSE)$acf)[-1]
+}
+look_pacf <- function(x) {
+  as.numeric(stats::pacf(x, lag.max = look_lag_max, plot = FALSE)$acf)
+}
+look_range <- function(x) {
+  z <- range(x, finite = TRUE)
+  pad <- max(0.08 * diff(z), 0.1)
+  z + c(-pad, pad)
+}
+
+### Simulations and binary asset ----
+
+set.seed(2030)
+look_innov <- matrix(
+  stats::rnorm((look_n_max + look_burn) * look_n_paths),
+  nrow = look_n_max + look_burn,
+  ncol = look_n_paths
+)
+
+look_simulate <- function(z, phi, n) {
+  p <- length(phi)
+  x <- numeric(length(z))
+  
+  for (t in seq_along(z)) {
+    x[t] <- z[t]
+    if (t > 1L) {
+      j <- seq_len(min(p, t - 1L))
+      x[t] <- x[t] + sum(phi[j] * x[t - j])
+    }
+  }
+  
+  x[look_burn + seq_len(n)]
+}
+
+look_asset_data <- lapply(seq_along(look_returns), function(j) {
+  z <- look_returns[[j]]
+  list(
+    name = look_asset_names[j],
+    dates = format(z$Date, "%Y-%m-%d"),
+    returns = round(z$Return, 7),
+    mean = mean(z$Return),
+    sd = stats::sd(z$Return),
+    fittedNu = unname(look_fitted_nu[j]),
+    acf = look_acf(z$Return),
+    pacf = look_pacf(z$Return)
+  )
+})
+
+look_initial_asset <- look_asset_data[[1]]
+look_initial_phi <- look_ar_coefficients[[look_initial_order]]
+look_initial_sim <- look_simulate(
+  look_t_innovations(look_innov[, 1], look_fitted_nu[1]),
+  look_initial_phi,
+  length(look_initial_asset$returns)
+)
+look_initial_sim <- look_initial_asset$mean +
+  look_initial_sim * look_initial_asset$sd / look_ar_sd[look_initial_order]
+
+look_initial_acf <- look_acf(look_initial_sim)
+look_initial_pacf <- look_pacf(look_initial_sim)
+
+look_asset_dir <- "figures/02/return-lookalikes-assets"
+dir.create(look_asset_dir, recursive = TRUE, showWarnings = FALSE)
+
+look_con <- file(file.path(look_asset_dir, "innovations.bin"), "wb")
+writeBin(as.numeric(look_innov), look_con, size = 4, endian = "little")
+close(look_con)
+
+look_con <- file(file.path(look_asset_dir, "t-quantiles.bin"), "wb")
+writeBin(as.numeric(look_quantile_map), look_con, size = 4, endian = "little")
+close(look_con)
+
+writeLines(
+  'window.drpReturnLookalikes02Base = new URL(".", document.currentScript.src).href;',
+  file.path(look_asset_dir, "loader.js"),
+  useBytes = TRUE
+)
+
+look_dependency <- htmltools::htmlDependency(
+  name = "drp-return-lookalikes-02",
+  version = "2.0.0",
+  src = c(file = normalizePath(look_asset_dir, winslash = "/")),
+  script = "loader.js",
+  all_files = TRUE
+)
+
+### Figure ----
+
+p18 <- plotly::plot_ly()
+
+# Observed daily returns, upper left.
+p18 <- plotly::add_trace(
+  p18,
+  x = look_initial_asset$dates, y = look_initial_asset$returns,
+  type = "scattergl", mode = "lines",
+  xaxis = "x", yaxis = "y",
+  line = list(color = "#0100CA", width = 1.15),
+  name = "Observed returns", showlegend = FALSE,
+  hovertemplate = "Date: %{x}<br>Observed return: %{y:.2f}%<extra></extra>",
+  inherit = FALSE
+)
+
+# 99 faint simulated returns and one selected realisation, lower left.
+p18 <- plotly::add_trace(
+  p18, x = character(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x3", yaxis = "y3",
+  line = list(color = "rgba(196,91,64,0.02)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+p18 <- plotly::add_trace(
+  p18,
+  x = look_initial_asset$dates, y = look_initial_sim,
+  type = "scattergl", mode = "lines",
+  xaxis = "x3", yaxis = "y3",
+  line = list(color = "#C45B40", width = 1.15),
+  name = "Negative AR model", showlegend = FALSE,
+  hovertemplate = "Date: %{x}<br>Simulated return: %{y:.2f}%<extra></extra>",
+  inherit = FALSE
+)
+
+# Observed ACF (blue) and simulated ACF (orange), upper right.
+p18 <- plotly::add_trace(
+  p18, x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "rgba(196,91,64,0.05)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+p18 <- plotly::add_trace(
+  p18, x = look_lags, y = look_initial_acf,
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "#C45B40", width = 1.35),
+  marker = list(color = "#C45B40", size = 4),
+  name = "Simulated ACF", showlegend = FALSE,
+  hovertemplate = "Lag: %{x}<br>Simulated ACF: %{y:.3f}<extra></extra>",
+  inherit = FALSE
+)
+p18 <- plotly::add_trace(
+  p18, x = look_lags, y = look_initial_asset$acf,
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x2", yaxis = "y2",
+  line = list(color = "#0100CA", width = 1.75),
+  marker = list(color = "#0100CA", size = 4.5),
+  name = "Observed ACF", showlegend = FALSE,
+  hovertemplate = "Lag: %{x}<br>Observed ACF: %{y:.3f}<extra></extra>",
+  inherit = FALSE
+)
+
+# Observed PACF (blue) and simulated PACF (orange), lower right.
+p18 <- plotly::add_trace(
+  p18, x = numeric(0), y = numeric(0),
+  type = "scattergl", mode = "lines",
+  xaxis = "x4", yaxis = "y4",
+  line = list(color = "rgba(196,91,64,0.05)", width = 1),
+  hoverinfo = "skip", showlegend = FALSE, inherit = FALSE
+)
+p18 <- plotly::add_trace(
+  p18, x = look_lags, y = look_initial_pacf,
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x4", yaxis = "y4",
+  line = list(color = "#C45B40", width = 1.35),
+  marker = list(color = "#C45B40", size = 4),
+  name = "Simulated PACF", showlegend = FALSE,
+  hovertemplate = "Lag: %{x}<br>Simulated PACF: %{y:.3f}<extra></extra>",
+  inherit = FALSE
+)
+p18 <- plotly::add_trace(
+  p18, x = look_lags, y = look_initial_asset$pacf,
+  type = "scatter", mode = "lines+markers",
+  xaxis = "x4", yaxis = "y4",
+  line = list(color = "#0100CA", width = 1.75),
+  marker = list(color = "#0100CA", size = 4.5),
+  name = "Observed PACF", showlegend = FALSE,
+  hovertemplate = "Lag: %{x}<br>Observed PACF: %{y:.3f}<extra></extra>",
+  inherit = FALSE
+)
+
+look_asset_buttons <- lapply(look_asset_names, function(a) {
+  list(label = a, method = "skip", args = list())
+})
+look_model_buttons <- lapply(seq_len(4), function(p) {
+  list(label = paste0("AR(", p, ")"), method = "skip", args = list())
+})
+look_distribution_buttons <- lapply(look_distributions, function(z) {
+  list(label = z, method = "skip", args = list())
+})
+look_mode_buttons <- lapply(c("One realisation", "All realisations"), function(z) {
+  list(label = z, method = "skip", args = list())
+})
+
+p18 <- plotly::layout(
+  p18,
+  title = list(
+    text = "Returns and AR trajectories",
+    x = 0.5, font = list(size = 21, color = "#000000")
+  ),
+  xaxis = list(
+    domain = c(0.05, 0.45), anchor = "y",
+    type = "date", range = c(look_initial_asset$dates[1],
+                             tail(look_initial_asset$dates, 1)),
+    showticklabels = FALSE,
+    fixedrange = FALSE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis = list(
+    domain = c(0.59, 0.92), anchor = "x",
+    range = look_range(look_initial_asset$returns),
+    title = "Return (%)", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = TRUE,
+    zerolinecolor = "#A0A5B5"
+  ),
+  xaxis2 = list(
+    domain = c(0.55, 0.95), anchor = "y2",
+    range = c(1, look_lag_max), dtick = 2,
+    showticklabels = FALSE,
+    fixedrange = TRUE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis2 = list(
+    domain = c(0.59, 0.92), anchor = "x2",
+    range = c(-1.05, 1.05), title = "ACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  xaxis3 = list(
+    domain = c(0.05, 0.45), anchor = "y3",
+    type = "date", matches = "x",
+    range = c(look_initial_asset$dates[1],
+              tail(look_initial_asset$dates, 1)),
+    title = "Calendar date", tickformat = "%Y",
+    fixedrange = FALSE, gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis3 = list(
+    domain = c(0.14, 0.47), anchor = "x3",
+    range = look_range(look_initial_sim),
+    title = "Return (%)", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = TRUE,
+    zerolinecolor = "#A0A5B5"
+  ),
+  xaxis4 = list(
+    domain = c(0.55, 0.95), anchor = "y4",
+    range = c(1, look_lag_max), dtick = 2,
+    title = "Lag h", fixedrange = TRUE,
+    gridcolor = "#E4E6F2", zeroline = FALSE
+  ),
+  yaxis4 = list(
+    domain = c(0.14, 0.47), anchor = "x4",
+    range = c(-1.05, 1.05), title = "PACF",
+    fixedrange = TRUE, gridcolor = "#E4E6F2",
+    zeroline = TRUE, zerolinecolor = "#A0A5B5"
+  ),
+  annotations = list(
+    list(
+      x = 0.05, y = 0.985, xref = "paper", yref = "paper",
+      text = "<b>Observed daily returns</b>", showarrow = FALSE,
+      xanchor = "left", font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.55, y = 0.985, xref = "paper", yref = "paper",
+      text = "<b>ACF: observed (blue), simulated (orange)</b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 12, color = "#000000")
+    ),
+    list(
+      x = 0.05, y = 0.525, xref = "paper", yref = "paper",
+      text = "<b>AR(4) — fitted t innovations</b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 13, color = "#000000")
+    ),
+    list(
+      x = 0.55, y = 0.525, xref = "paper", yref = "paper",
+      text = "<b>PACF: observed (blue), simulated (orange)</b>",
+      showarrow = FALSE, xanchor = "left",
+      font = list(size = 12, color = "#000000")
+    )
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown", buttons = look_asset_buttons,
+      active = 0, showactive = TRUE,
+      x = 0.075, xanchor = "left", y = 1.04, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = look_model_buttons,
+      active = look_initial_order - 1, showactive = TRUE,
+      x = 0.25, xanchor = "left", y = 1.04, yanchor = "middle"
+    ),
+    list(
+      type = "dropdown", buttons = look_distribution_buttons,
+      active = match(look_initial_distribution, look_distributions) - 1L,
+      showactive = TRUE,
+      x = 0.4, xanchor = "left", y = 1.04, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = look_mode_buttons,
+      active = 0, showactive = TRUE,
+      x = 0.50, xanchor = "center", y = 0, yanchor = "middle"
+    ),
+    list(
+      type = "buttons", direction = "right",
+      buttons = list(list(
+        label = "Next realisation", method = "skip", args = list()
+      )),
+      active = -1, showactive = FALSE,
+      x = 0.85, xanchor = "center", y = 0, yanchor = "middle"
+    )
+  ),
+  autosize = TRUE, height = 820,
+  margin = list(l = 50, r = 55, t = 120, b = 10),
+  paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF"
+)
+
+p18 <- plotly::config(
+  p18, responsive = TRUE, displaylogo = FALSE,
+  doubleClick = "reset"
+)
+p18$dependencies <- c(p18$dependencies, list(look_dependency))
+
+### Interactivity ----
+
+p18 <- htmlwidgets::onRender(
+  p18,
+  "
+  function(el, x, data) {
+    var assets = data.assets;
+    var coeffs = data.coefficients;
+    var arSd = data.arSd;
+    var assetIndex = 0;
+    var order = data.initialOrder;
+    var distribution = data.initialDistribution;
+    var highlight = 0;
+    var showAll = false;
+    var raw = null;
+    var tQuantiles = null;
+    var modelKey = null;
+    var unitPaths = null;
+    var scaledKey = null;
+    var simulated = null;
+    var statsKey = null;
+    var acfs = null;
+    var pacfs = null;
+    var nMax = data.nMax;
+    var burn = data.burn;
+    var nPaths = data.nPaths;
+    var pathLength = nMax + burn;
+    var lags = Array.from({length: data.lagMax}, function(_, i) { return i + 1; });
+
+    function innovation(z) {
+      if (distribution === 'Gaussian') return z;
+      var column = distribution === 'Student-t (5)' ? 0 :
+        distribution === 'Student-t (10)' ? 1 : 2 + assetIndex;
+      var position = (z - data.gridMin) / data.gridStep;
+      var k = Math.max(0, Math.min(data.gridN - 2, Math.floor(position)));
+      var weight = Math.max(0, Math.min(1, position - k));
+      var offset = column * data.gridN + k;
+      return tQuantiles[offset] * (1 - weight) +
+        tQuantiles[offset + 1] * weight;
+    }
+
+    function getUnitPaths() {
+      var key = order + ':' + distribution + ':' +
+        (distribution === 'Fitted Student-t' ? assetIndex : 'shared');
+      if (modelKey === key) return unitPaths;
+      var phi = coeffs[order - 1].slice(0, order);
+      var generated = new Array(nPaths);
+      for (var j = 0; j < nPaths; j++) {
+        var x = new Array(nMax);
+        var previous = new Array(order).fill(0);
+        var offset = j * pathLength;
+        for (var t = 0; t < pathLength; t++) {
+          var value = innovation(raw[offset + t]);
+          for (var k = 0; k < order; k++) value += phi[k] * previous[k];
+          for (var k = order - 1; k > 0; k--) previous[k] = previous[k - 1];
+          previous[0] = value;
+          if (t >= burn) x[t - burn] = value;
+        }
+        generated[j] = x;
+      }
+      modelKey = key;
+      unitPaths = generated;
+      return unitPaths;
+    }
+
+    function getScaledPaths() {
+      var base = getUnitPaths();
+      var key = assetIndex + ':' + modelKey;
+      if (key === scaledKey) return simulated;
+      var a = assets[assetIndex];
+      var n = a.returns.length;
+      var scale = a.sd / arSd[order - 1];
+      var result = new Array(nPaths);
+      for (var j = 0; j < nPaths; j++) {
+        var z = new Array(n);
+        for (var t = 0; t < n; t++) z[t] = a.mean + base[j][t] * scale;
+        result[j] = z;
+      }
+      scaledKey = key;
+      simulated = result;
+      return simulated;
+    }
+
+    function sampleAcf(series) {
+      var n = series.length;
+      var mean = 0;
+      for (var i = 0; i < n; i++) mean += series[i];
+      mean /= n;
+      var centered = new Array(n);
+      var denom = 0;
+      for (var i = 0; i < n; i++) {
+        centered[i] = series[i] - mean;
+        denom += centered[i] * centered[i];
+      }
+      var result = new Array(data.lagMax);
+      for (var h = 1; h <= data.lagMax; h++) {
+        var numer = 0;
+        for (var t = h; t < n; t++) numer += centered[t] * centered[t - h];
+        result[h - 1] = denom > 0 ? numer / denom : 0;
+      }
+      return result;
+    }
+
+    function samplePacf(acf) {
+      var previous = [];
+      var pacf = [];
+      for (var m = 1; m <= data.lagMax; m++) {
+        var numer = acf[m - 1];
+        var denom = 1;
+        for (var j = 1; j < m; j++) {
+          numer -= previous[j - 1] * acf[m - j - 1];
+          denom -= previous[j - 1] * acf[j - 1];
+        }
+        var kappa = Math.abs(denom) > 1e-12 ? numer / denom : 0;
+        var current = new Array(m);
+        for (var j = 1; j < m; j++) {
+          current[j - 1] = previous[j - 1] - kappa * previous[m - j - 1];
+        }
+        current[m - 1] = kappa;
+        previous = current;
+        pacf.push(kappa);
+      }
+      return pacf;
+    }
+
+    function ensureStats() {
+      var key = scaledKey;
+      if (statsKey !== key) {
+        statsKey = key;
+        acfs = new Array(nPaths);
+        pacfs = new Array(nPaths);
+      }
+      function ensure(j) {
+        if (!acfs[j]) {
+          acfs[j] = sampleAcf(simulated[j]);
+          pacfs[j] = samplePacf(acfs[j]);
+        }
+      }
+      ensure(highlight);
+      if (showAll) for (var j = 0; j < nPaths; j++) ensure(j);
+    }
+
+    function stackSeries(values, dates, omit) {
+      var xs = [], ys = [];
+      for (var j = 0; j < values.length; j++) {
+        if (j === omit) continue;
+        for (var t = 0; t < dates.length; t++) {
+          xs.push(dates[t]); ys.push(values[j][t]);
+        }
+        xs.push(null); ys.push(null);
+      }
+      return {x: xs, y: ys};
+    }
+
+    function stackDependence(values, omit) {
+      var xs = [], ys = [];
+      for (var j = 0; j < values.length; j++) {
+        if (j === omit) continue;
+        for (var k = 0; k < lags.length; k++) {
+          xs.push(lags[k]); ys.push(values[j][k]);
+        }
+        xs.push(null); ys.push(null);
+      }
+      return {x: xs, y: ys};
+    }
+
+    function displayRange(values) {
+      var lo = Infinity, hi = -Infinity;
+      for (var i = 0; i < values.length; i++) {
+        if (values[i] < lo) lo = values[i];
+        if (values[i] > hi) hi = values[i];
+      }
+      var pad = Math.max(0.08 * (hi - lo), 0.1);
+      return [lo - pad, hi + pad];
+    }
+
+    function updatePlot(resetZoom) {
+      if (!raw) return;
+      var a = assets[assetIndex];
+      getScaledPaths();
+      ensureStats();
+      var bgSeries = showAll ? stackSeries(simulated, a.dates, highlight) : {x: [], y: []};
+      var bgAcf = showAll ? stackDependence(acfs, highlight) : {x: [], y: []};
+      var bgPacf = showAll ? stackDependence(pacfs, highlight) : {x: [], y: []};
+      var distLabel = distribution === 'Fitted Student-t' ?
+        'fitted t (nu=' + a.fittedNu.toFixed(2) + ')' : distribution;
+      var layoutChange = {
+        'yaxis.range': displayRange(a.returns),
+        'yaxis3.range': displayRange(simulated[highlight]),
+        'annotations[2].text': '<b>AR(' + order + ') — ' + distLabel + '</b>'
+      };
+      if (resetZoom) {
+        layoutChange['xaxis.range'] = [a.dates[0], a.dates[a.dates.length - 1]];
+        layoutChange['xaxis3.range'] = [a.dates[0], a.dates[a.dates.length - 1]];
+      }
+      Plotly.update(
+        el,
+        {
+          x: [a.dates, bgSeries.x, a.dates,
+              bgAcf.x, lags, lags,
+              bgPacf.x, lags, lags],
+          y: [a.returns, bgSeries.y, simulated[highlight],
+              bgAcf.y, acfs[highlight], a.acf,
+              bgPacf.y, pacfs[highlight], a.pacf]
+        },
+        layoutChange,
+        [0, 1, 2, 3, 4, 5, 6, 7, 8]
+      );
+    }
+
+    el.on('plotly_buttonclicked', function(e) {
+      var label = e.button.label;
+      var resetZoom = false;
+      if (data.assetNames.indexOf(label) >= 0) {
+        assetIndex = data.assetNames.indexOf(label);
+        resetZoom = true;
+      } else if (label.indexOf('AR(') === 0) {
+        order = Number(label.slice(3, -1));
+      } else if (data.distributions.indexOf(label) >= 0) {
+        distribution = label;
+      } else if (label === 'One realisation') {
+        showAll = false;
+      } else if (label === 'All realisations') {
+        showAll = true;
+      } else if (label === 'Next realisation') {
+        highlight = (highlight + 1) % nPaths;
+      }
+      updatePlot(resetZoom);
+    });
+
+    if (!window.drpReturnLookalikes02Base) {
+      console.error('Return lookalikes: simulation dependency was not loaded.');
+      return;
+    }
+    Promise.all([
+      fetch(new URL('innovations.bin', window.drpReturnLookalikes02Base)),
+      fetch(new URL('t-quantiles.bin', window.drpReturnLookalikes02Base))
+    ])
+      .then(function(responses) {
+        responses.forEach(function(response) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+        });
+        return Promise.all(responses.map(function(response) {
+          return response.arrayBuffer();
+        }));
+      })
+      .then(function(buffers) {
+        var expectedRaw = 4 * nPaths * pathLength;
+        var expectedQuantiles = 4 * data.gridN * data.quantileColumns;
+        if (buffers[0].byteLength !== expectedRaw ||
+            buffers[1].byteLength !== expectedQuantiles) {
+          throw new Error('Unexpected innovation or quantile binary size.');
+        }
+        var view = new DataView(buffers[0]);
+        raw = new Float32Array(expectedRaw / 4);
+        for (var i = 0; i < raw.length; i++) {
+          raw[i] = view.getFloat32(4 * i, true);
+        }
+        view = new DataView(buffers[1]);
+        tQuantiles = new Float32Array(expectedQuantiles / 4);
+        for (var i = 0; i < tQuantiles.length; i++) {
+          tQuantiles[i] = view.getFloat32(4 * i, true);
+        }
+        updatePlot(false);
+      })
+      .catch(function(error) {
+        console.error('Return lookalikes: failed to load binary assets', error);
+      });
+  }
+  ",
+  data = list(
+    assets = unname(look_asset_data),
+    assetNames = unname(look_asset_names),
+    distributions = unname(look_distributions),
+    initialDistribution = look_initial_distribution,
+    coefficients = unname(look_coefficients_js),
+    arSd = unname(look_ar_sd),
+    initialOrder = look_initial_order,
+    nMax = look_n_max,
+    nPaths = look_n_paths,
+    lagMax = look_lag_max,
+    burn = look_burn,
+    gridMin = look_grid_min,
+    gridStep = look_grid_step,
+    gridN = length(look_grid_z),
+    quantileColumns = length(look_df_grid)
+  )
+)
+
+p18
+saveRDS(p18, "figures/02/return-lookalikes.rds")

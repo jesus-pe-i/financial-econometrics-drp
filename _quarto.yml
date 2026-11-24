@@ -14,25 +14,27 @@ website:
 
       - text: Sessions
         menu:
-          - text: "01 — Financial Stylised Facts"
+          - text: "Financial Stylised Facts"
             href: sessions/01-stylised-facts.qmd
-          - text: "02 — Stationarity and Time Series Models"
+          - text: "Time Series I"
             href: sessions/02-stationarity.qmd
-          - text: "03 — Measuring and Forecasting Volatility"
+          - text: "Time Series II"
+            href: sessions/03-variance.qmd
+          - text: "Forecasting and Benchmarking"
             href: sessions/03-measuring-volatility.qmd
-          - text: "04 — GARCH Models"
+          - text: "GARCH Models"
             href: sessions/04-garch.qmd
-          - text: "05 — HAR Models"
+          - text: "HAR Models"
             href: sessions/05-har.qmd
-          - text: "06 — Machine Learning"
+          - text: "Machine Learning"
             href: sessions/06-boosted-trees.qmd
-          - text: "07 — Continuous-Time Models"
+          - text: "Continuous-Time Models"
             href: sessions/07-continuous-time.qmd
-          - text: "08 — Point Processes"
+          - text: "Point Processes"
             href: sessions/08-point-processes.qmd
-          - text: "09 — Self-Exciting Markets"
+          - text: "Self-Exciting Markets"
             href: sessions/09-connecting-processes.qmd
-          - text: "10 — Research Workshop"
+          - text: "Research Workshop"
             href: sessions/10-research-workshop.qmd
 
 format:

@@ -1,5 +1,5 @@
 ---
-title: "Stationarity and Time Series Models"
+title: "Time Series I - Stationarity and Mean Modelling"
 subtitle: "Session 02"
 toc: true
 toc-title: "On this page"
@@ -2034,5 +2034,556 @@ previous innovations to influence the current value?**
 That is the idea behind autoregressive moving-average
 (ARMA) models.
 
+## Autoregressive moving-average models
 
+We have seen that AR and MA models describe dependence
+through two different mechanisms. An autoregressive term
+transmits information through previous observations,
+while a moving-average term transmits the effects of
+previous innovations. There is no reason a time series
+must use only one mechanism.
 
+An **autoregressive moving-average model**, ARMA($p,q$),
+combines them:
+
+$$
+X_t=c+\sum_{i=1}^{p}\phi_iX_{t-i}
++\varepsilon_t+\sum_{j=1}^{q}\theta_j\varepsilon_{t-j}.
+$$
+
+Here, $p$ is the autoregressive order and $q$ is the
+moving-average order. The innovations have mean zero,
+and their distribution and variance are specified as
+part of the model. For example, an ARMA(1,1) is
+
+$$
+X_t=c+\phi X_{t-1}+\varepsilon_t
++\theta\varepsilon_{t-1}.
+$$
+
+The AR coefficient controls how previous observations
+propagate forward, while the MA coefficient determines
+how the previous innovation enters the current value.
+These effects can reinforce or partially offset one
+another. Consequently, changing either coefficient
+can alter the process's dependence structure.
+
+::: {#fig-arma-explorer}
+
+```{r}
+#| fig-width: 12
+#| fig-height: 9.5
+
+readRDS("figures/02/arma-explorer.rds")
+```
+
+Simulated stationary, invertible ARMA($p,q$) models,
+with $p,q\in\{1,2,3\}$, and their empirical ACFs and
+PACFs.
+
+:::
+
+In @fig-arma-explorer, begin with ARMA(1,1) and
+**Moderate** strength. Compare positive and negative
+dependence. The trajectories may look quite different,
+but the distinction is often clearer in their estimated
+ACFs and PACFs.
+
+Next, increase $p$ or $q$ independently. Some models
+produce persistent autocorrelations; others exhibit
+oscillating or weak correlations at several lags.
+Changing the order is not equivalent to increasing
+persistence. The figure uses selected coefficient
+families with stationary and invertible representations,
+not every possible ARMA($p,q$) specification.
+
+As before, the displayed autocorrelations are *sample
+estimates*. They can differ substantially across
+realisations of the same DGP. Select **All realisations**
+and then increase the sample size. More observations
+usually make the dependence structure easier to
+recognise, but no finite sample reveals the underlying
+model with certainty.
+
+::: {.callout-note title="Discussion: identifying ARMA models"}
+
+- Compare ARMA(1,1) under weak and strong dependence.
+  How much can its empirical ACF and PACF change?
+
+- Keep the order fixed and switch between positive
+  and negative dependence. What changes in the paths
+  and in the signs of their autocorrelations?
+
+- Could two distinct ARMA specifications produce
+  broadly similar empirical ACFs in a short sample?
+
+- Why is inspecting both the ACF and PACF useful,
+  even though neither may exhibit a clean cutoff?
+
+:::
+
+ARMA models provide a flexible framework for describing
+the conditional mean of a **stationary** series.
+However, some economically important variables do not
+behave as stationary processes in levels. To extend
+our model family, we return to the random walk.
+
+## Integration and ARIMA
+
+Recall the random walk
+
+$$
+X_t=X_{t-1}+\varepsilon_t.
+$$
+
+Its variance generally grows through time, so it is
+not covariance stationary. But consider the change
+between two consecutive observations:
+
+$$
+\Delta X_t=X_t-X_{t-1}=\varepsilon_t.
+$$
+
+The differences are white noise when the innovations
+are iid. Thus, the original series can be nonstationary
+even though its first differences are stationary.
+This motivates the idea of **integration**.
+
+A process is called *integrated of order one*, or
+$I(1)$, when its first difference is stationary but
+the series in levels is not, under the usual definition
+of integration. More generally, an $I(d)$ process
+becomes stationary after differencing $d$ times,
+and not after fewer differences. The cases $d=0$ and
+$d=1$ are especially common in introductory economic
+time-series analysis.
+
+Using the **lag operator** $B$, defined by
+$BX_t=X_{t-1}$, we can write the first difference as
+
+$$
+\Delta X_t=(1-B)X_t.
+$$
+
+An **autoregressive integrated moving-average model**,
+ARIMA($p,d,q$), applies an ARMA model to the $d$-th
+difference of the original series:
+
+$$
+\phi(B)(1-B)^dX_t
+=c+\theta(B)\varepsilon_t,
+$$
+
+where
+
+$$
+\phi(B)=1-\phi_1B-\cdots-\phi_pB^p,
+\qquad
+\theta(B)=1+\theta_1B+\cdots+\theta_qB^q.
+$$
+
+An ARIMA($p,0,q$) is simply an ARMA($p,q$). An
+ARIMA(0,1,0) without drift is a random walk, while
+an ARIMA(1,1,1) models the first differences using
+both autoregressive and moving-average terms:
+
+$$
+\Delta X_t=c+\phi\Delta X_{t-1}
++\varepsilon_t+\theta\varepsilon_{t-1}.
+$$
+
+In this final equation, $c$ is a constant in the
+*differenced* process. A nonzero constant can therefore
+induce a drift in the level of $X_t$.
+
+::: {#fig-arima-differencing}
+
+```{r}
+#| fig-width: 11
+#| fig-height: 8.5
+
+readRDS("figures/02/arima-differencing.rds")
+```
+
+Simulated ARIMA(0,1,0), ARIMA(1,1,0), ARIMA(0,1,1),
+and ARIMA(1,1,1) models. The upper panel shows the
+integrated series in levels; the lower panel shows its
+stationary first differences.
+
+:::
+
+Begin with ARIMA(0,1,0) in @fig-arima-differencing.
+The level wanders because it accumulates independent
+innovations. The first difference, by contrast, has
+no serial dependence.
+
+Switch to ARIMA(1,1,0). The differences now follow an
+AR(1), so consecutive changes can be correlated. With
+ARIMA(0,1,1), each innovation affects two consecutive
+differences. ARIMA(1,1,1) combines both mechanisms.
+In all four examples, the first differences are
+stationary, although their autocorrelation structures
+are not identical.
+
+Select **All realisations**. The level trajectories can
+spread widely even when their underlying differences
+have the same stable distribution. This is why
+**stationarity of changes does not imply stationarity
+of levels**.
+
+Differencing is useful, but it should not become an
+automatic preprocessing step. Differencing an already
+stationary series may remove useful information and
+introduce unnecessary moving-average behaviour.
+Moreover, structural breaks or changing economic
+regimes are not necessarily resolved by differencing.
+
+The distinction between levels and changes also matters
+for financial data. A log price may be approximated by
+an integrated process, while its log returns are the
+first differences and may be approximately stationary.
+For inflation, we must be equally careful: year-on-year
+CPI inflation is already a twelve-month change in the
+price level, expressed as a percentage. It is not
+automatically an $I(1)$ process, and we should not
+assume it requires further differencing.
+
+::: {.callout-note title="Discussion: when should we difference?"}
+
+1. Why can the four level processes look nonstationary
+   even though their first differences are stationary?
+
+2. Compare the first differences of ARIMA(0,1,0)
+   and ARIMA(1,1,0). Which series contains more
+   information about its next change?
+
+3. Would you automatically difference daily financial
+   returns? What information would justify doing so?
+
+4. If inflation changes behaviour after a policy
+   regime shift, would first differencing necessarily
+   make a model estimated before the shift reliable?
+
+:::
+
+We now have several models for the conditional mean:
+AR models, MA models, their ARMA combinations, and
+ARIMA models for integrated series. But defining a
+model is not enough. We also need to ask whether it
+forecasts well and whether it reproduces the properties
+of the observations it is meant to explain.
+
+## Applications to economic and financial data
+
+### Can ARIMA models forecast inflation?
+
+We return to the five inflation series introduced in
+the stationarity section: Japan, the United Kingdom,
+Mexico, Türkiye, and Brazil. Recall that we measure
+monthly year-on-year CPI inflation as
+
+$$
+\pi_t=100\left(\frac{CPI_t}{CPI_{t-12}}-1\right).
+$$
+
+Our earlier analysis asked whether inflation appeared
+stable across historical periods. Now the question is
+more practical: **given the information available at a
+particular date, what would a model have predicted?**
+
+We compare four forecasting approaches:
+
+- **Persistence:** use the last observed inflation
+  rate as the forecast at every future horizon.
+  Its point forecast coincides with that of a
+  driftless random walk.
+- **AR(1):** forecast inflation using its previous
+  level and an estimated long-run mean.
+- **ARMA(1,1):** combine past inflation and past
+  innovations in a stationary mean model.
+- **ARIMA(1,1,1):** model first differences of
+  inflation using an ARMA(1,1) process.
+
+At every forecast origin, we estimate each applicable
+model using both the **previous 48 monthly observations**
+and the **full previous expanding data**,
+including the observation at the origin. The windows
+moves forward one month at a time. In other words, the
+models are repeatedly re-estimated and fitted
+once using the entire historical series, depending on
+the setting.
+
+The five countries begin at different dates. For this
+exercise, their first included observations are August
+1985 for Japan, April 1984 for the United Kingdom,
+January 2002 for Mexico, January 2004 for Türkiye,
+and January 1998 for Brazil. The first forecast origin
+follows the initial 48-month estimation window.
+To evaluate both target horizons, each origin must
+also have twelve subsequent months of observations.
+
+::: {#fig-inflation-forecasting}
+
+```{r}
+#| fig-width: 12
+#| fig-height: 9
+
+readRDS("figures/02/inflation-forecasting.rds")
+```
+
+Rolling- and expanding-window forecasts of year-on-year CPI inflation
+in five countries. The upper panel displays
+historical context; the lower panel compares the
+realised inflation path with forecasts over the next
+twelve months. The 6- and 12-month targets are
+highlighted, together with approximate 95% prediction
+bands.
+
+:::
+
+In @fig-inflation-forecasting, begin with a relatively
+stable period in the United Kingdom or Japan. Compare
+the persistence forecast with the AR(1), ARMA(1,1),
+and ARIMA(1,1,1) forecasts. Do the more complicated
+models predict different trajectories? Are those
+differences particularly large at twelve months?
+
+Now move the forecast origin towards a major economic
+disruption. Try Türkiye around 2022, or another period
+with substantial inflation changes. A fitted model can
+produce a striking forecast even when its underlying
+assumptions are implausible for the new regime.
+Investigate both the point forecast and the uncertainty
+band. A prediction interval is conditional on the
+fitted model; it does not protect us automatically
+against model misspecification or structural change.
+
+The intervals deserve one qualification. The AR,
+ARMA, and ARIMA bands use fitted-model Gaussian
+forecast standard errors. The persistence bands are
+approximate Gaussian reference intervals based on
+historical changes at each forecast horizon. They are
+not all obtained from an identical probability model,
+and nominal 95% coverage is not guaranteed.
+
+Nor should an impressive forecast at one selected
+origin decide which model is best. Proper comparison
+requires many forecasts made without looking ahead,
+with common target dates and a consistent evaluation
+criterion. We will develop that framework in the
+volatility-forecast evaluation part of the DRP.
+
+::: {.callout-note title="Discussion: evaluating economic forecasts"}
+
+1. Compare 6- and 12-month forecasts after changing
+   the forecast origin. Which horizon seems most sensitive?
+
+3. Can the forecast interval become very wide or
+   unrealistic? Why is this not necessarily evidence
+   that the model understands the economic uncertainty?
+
+4. What are the main differences observed between rolling and expanding window forecasting?
+
+:::
+
+### Can realistic-looking returns come from the wrong model?
+
+Forecast errors are one way to evaluate a model, but
+there is another question: **does the fitted or proposed
+process reproduce the statistical features of the
+observed series?**
+
+In Session 1, we saw that financial returns often have
+heavy tails and exhibit clustering of large movements.
+Earlier in this session, we also found that strongly
+negative AR coefficients can generate runs of large,
+alternating observations. Such a process might look
+surprisingly similar to financial returns, even though
+its dependence is driven by its conditional mean.
+
+To investigate, we compare observed returns with
+simulated **negative AR(1)–AR(4)** processes. The AR
+coefficients are deliberately chosen examples, not
+estimates fitted to each asset. The simulations are
+matched to each asset's return mean and standard
+deviation, and each series has the same observation
+length as the corresponding empirical returns.
+
+We also vary the innovation distribution:
+Gaussian, Student-t with five degrees of freedom,
+Student-t with ten degrees of freedom, or Student-t
+with degrees of freedom fitted to the *unconditional*
+returns of the selected asset. These fitted degrees
+of freedom do not come from an AR residual model.
+
+For a Student-t variable $T_\nu$ with $\nu>2$,
+we use the variance-standardised innovation
+
+$$
+z_t=\sqrt{\frac{\nu-2}{\nu}}\,T_\nu,
+\qquad \operatorname{Var}(z_t)=1.
+$$
+
+Thus, we can change the distribution's tail thickness
+without changing the innovation variance. The same
+underlying random draws are used to make distribution
+comparisons more controlled.
+
+::: {#fig-return-lookalikes}
+
+```{r}
+#| fig-width: 12
+#| fig-height: 9
+
+readRDS("figures/02/return-lookalikes.rds")
+```
+
+Observed daily log returns and simulated negative
+AR(1)–AR(4) processes for six financial assets. The
+left panels compare trajectories; the right panels
+compare empirical ACFs and PACFs, with observed
+statistics highlighted.
+
+:::
+
+Begin with S&P 500 returns and Gaussian innovations
+in @fig-return-lookalikes. Change the AR order and
+inspect the simulated trajectory. Now switch to
+Student-t innovations. The simulated series can
+produce larger shocks and may look more like the
+heavy-tailed returns we investigated in Session 1.
+
+But look at the **ACF and PACF**, not just the
+trajectories. The simulated AR processes impose a
+particular dependence structure on signed returns.
+For many financial return series, the empirical raw-return
+autocorrelations are comparatively small.
+Matching the marginal scale and making the innovations
+heavy-tailed does not remove the AR structure.
+
+Select **All realisations**. The faint simulated ACFs
+and PACFs show that a discrepancy is not necessarily
+peculiar to one simulated trajectory: it can follow
+from the statistical mechanism that generated the
+entire ensemble. Still, empirical autocorrelations
+vary with the sample, so they are evidence for model
+criticism rather than a mechanical proof that every
+AR model is unsuitable for financial returns.
+
+Most importantly, consider the conditional variance.
+For an AR process with independent innovations of
+constant finite variance,
+
+$$
+\operatorname{Var}(X_t\mid\mathcal F_{t-1})
+=\operatorname{Var}(\varepsilon_t)=\sigma_\varepsilon^2.
+$$
+
+A large shock may generate several large subsequent
+*observations* through the conditional mean. But
+this does not make future innovations conditionally
+more variable. Heavier tails alter the size and
+frequency of extreme innovations; by themselves,
+they do not introduce time-varying conditional variance.
+
+::: {.callout-note title="Discussion: are plausible paths enough?"}
+
+- Which combination of AR order and innovation
+  distribution produces the most visually convincing
+  imitation of your chosen asset's returns?
+
+- Does the empirical ACF or PACF support that
+  impression? What changes when you switch to
+  **All realisations**?
+
+- Why can Student-t innovations make the simulated
+  trajectory more realistic without changing its
+  population autocorrelation structure?
+
+- If a simulated process occasionally produces
+  clusters of extreme observations, does that prove
+  its conditional variance is changing?
+
+:::
+
+### What have we learned about mean models?
+
+We began this session with a fundamental difficulty:
+we observe one realisation, but want to learn about
+the stochastic process that generated it. Stationarity,
+autocorrelation, and the models developed here provide
+ways of organising that inference.
+
+AR and MA models describe different mechanisms for
+transmitting information through time. ARMA combines
+those mechanisms, while ARIMA extends the framework
+to appropriately integrated processes. We have also
+seen that a model must be judged by more than the
+appearance of a simulated trajectory. Its dependence
+structure, distributional assumptions, forecasting
+performance, and treatment of uncertainty all matter.
+
+This distinction is particularly important for
+financial returns. Their conditional mean can be
+difficult to predict, while the **magnitude** of future
+movements may still be predictable. The empirical
+patterns from Session 1 suggest that uncertainty
+itself can vary through time.
+
+In the next session, we will therefore shift from
+modelling the conditional mean to modelling the
+**conditional variance**. We will distinguish
+conditional from unconditional volatility, introduce
+ARCH and GARCH(1,1), and consider the idea of volatility
+as an unobserved stochastic process. That is the next
+step towards building models of financial turbulence.
+
+::: {.callout-note title="Work to take home"}
+
+1. **Explore autoregressive and moving-average models.**
+
+   Review the definitions of AR, MA, ARMA and ARIMA
+   models, paying particular attention to stationarity,
+   differencing and the interpretation of the ACF and PACF.
+
+   Using R or Python, simulate 500 observations from
+   three stationary processes:
+
+   - An AR(2).
+   - An MA(2).
+   - An ARMA(1,1).
+
+   Choose your own coefficients, ensuring the processes
+   satisfy the appropriate stationarity and invertibility
+   conditions.
+
+   Plot their trajectories and empirical ACFs and PACFs.
+
+   Repeat the simulations using different random seeds.
+   Can you reliably distinguish the three models?
+   Which statistical features are most informative?
+
+2. **Investigate mean dependence in financial returns.**
+
+   Return to the daily financial data you prepared
+   for Session 1, or download a new asset of your choice.
+
+   Calculate daily logarithmic returns and investigate
+   their empirical ACF and PACF.
+
+   Fit an AR(1) and an ARMA(1,1) model to the returns.
+   Compare their fitted parameters and examine the
+   residuals from each model.
+
+   - Do the residuals exhibit significant autocorrelation?
+   - What happens when you examine the ACF of the
+     squared residuals?
+   - Does accounting for conditional mean dependence
+     also explain the clustering of large returns?
+   - Based on these diagnostics, which aspects of
+     the return process remain unexplained?
+
+   Summarise your findings using a few plots and
+   a short interpretation.
+
+:::
